@@ -1,1 +1,1 @@
-web: gunicorn -k uvicorn.workers.UvicornWorker -w 2 --bind 0.0.0.0:$PORT api.main:app
+web: sh -c 'exec gunicorn -k uvicorn.workers.UvicornWorker -w ${WEB_CONCURRENCY:-2} --bind 0.0.0.0:${PORT:-8080} api.main:app'
