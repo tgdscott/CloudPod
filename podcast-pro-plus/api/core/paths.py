@@ -52,3 +52,6 @@ __all__ = [
     "FLUBBER_CTX_DIR",
     "AI_SEGMENTS_DIR",
 ]
+
+# Back-compat alias for older code
+FLUBBER_DIR = FLUBBER_CTX_DIR
