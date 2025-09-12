@@ -8,3 +8,4 @@ aiofiles
 sqlmodel
 sqlalchemy
 httpx
+email-validator
