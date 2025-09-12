@@ -1,0 +1,14 @@
+﻿.venv/
+venv/
+node_modules/
+frontend/node_modules/
+dist/
+build/
+**/__pycache__/
+.DS_Store
+.git/
+*.wav
+*.mp3
+podcast-pro-plus/cleaned_audio/
+podcast-pro-plus/media_uploads/
+podcast-pro-plus/final_episodes/

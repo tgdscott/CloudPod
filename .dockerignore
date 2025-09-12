@@ -1,0 +1,21 @@
+.venv
+node_modules
+frontend/node_modules
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.db
+.DS_Store
+.git
+.gitignore
+*.log
+
+# Keep bulky local-only dirs out of the image, but KEEP podcast-pro-plus/*
+assembly_logs
+cleaned_audio
+edited_audio
+final_episodes
+media_uploads
+transcripts
+tests

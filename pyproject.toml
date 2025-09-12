@@ -1,0 +1,18 @@
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E203"]  # allow black-style slicing
+target-version = "py312"
+fix = true
+
+[tool.mypy]
+python_version = "3.12"
+warn_unused_ignores = true
+warn_return_any = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
+exclude = ["frontend/.*", "tests/.*"]
+
+[tool.pyright]
+pythonVersion = "3.12"
+typeCheckingMode = "basic"
