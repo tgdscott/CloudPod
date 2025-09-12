@@ -1,3 +1,4 @@
+from __future__ import annotations
 from starlette.staticfiles import StaticFiles
 from api.core.paths import FINAL_DIR, MEDIA_DIR, FLUBBER_CTX_DIR
 import logging
@@ -17,7 +18,6 @@ for d in (FINAL_DIR, MEDIA_DIR, FLUBBER_DIR):
     except Exception as e:
         log.warning("Could not create static dir %s: %s", d, e)
 import logging
-from __future__ import annotations
 import os, logging
 
 import os
