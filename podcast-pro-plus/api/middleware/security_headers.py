@@ -54,6 +54,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
         # Build directive extras as space-prefixed strings (or empty)
         style_extra = (" " + " ".join(extra_style)) if extra_style else ""
+        # Ensure we permit secure-scheme connects (https:) for API calls and CDNs
+        if "https:" not in extra_connect:
+            extra_connect.insert(0, "https:")
         connect_extra = (" " + " ".join(extra_connect)) if extra_connect else ""
         font_extra = (" " + " ".join(extra_font)) if extra_font else ""
         img_extra = (" " + " ".join(extra_img)) if extra_img else ""
@@ -63,6 +66,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "default-src 'self'; "
             "base-uri 'self'; "
             "frame-ancestors 'none'; "
+            f"media-src 'self' blob:; "
             f"img-src 'self' data:{img_extra}; "
             f"style-src 'self' 'unsafe-inline'{style_extra}; "
             "script-src 'self'; "
@@ -98,7 +102,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         # Other helpful headers
         response.headers.setdefault("X-Frame-Options", "DENY")
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
-        response.headers.setdefault("Referrer-Policy", "no-referrer")
-        response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        response.headers.setdefault("Permissions-Policy", "camera=(), microphone=()")
+        # HSTS header expected by tests
+        response.headers.setdefault("Strict-Transport-Security", "max-age=15552000; includeSubDomains")
 
         return response
