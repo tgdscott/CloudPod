@@ -119,7 +119,10 @@ app.add_middleware(SessionMiddleware,
 )
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # tighten in prod if desired
+    # Avoid wildcard '*' when credentials are allowed. Use explicit origins from env.
+    # CORS_ALLOWED_ORIGINS may be a comma-separated list, e.g.:
+    #   CORS_ALLOWED_ORIGINS=https://app.getpodcastplus.com,https://staging.example
+    allow_origins=(os.getenv("CORS_ALLOWED_ORIGINS", "https://app.getpodcastplus.com").split(",")),
     allow_methods=["*"],
     allow_headers=["*"],
     allow_credentials=True,
@@ -130,6 +133,29 @@ from api.middleware.request_id import RequestIDMiddleware
 from api.middleware.security_headers import SecurityHeadersMiddleware
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
+
+# --- Diagnostic middleware: log Origin and final CORS response headers ---
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request as StarletteRequest
+class ResponseLoggingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: StarletteRequest, call_next):
+        try:
+            origin = request.headers.get('origin')
+            method = request.method
+            path = request.url.path
+            log.debug("[CORS-DBG] incoming request method=%s path=%s origin=%s", method, path, origin)
+        except Exception:
+            pass
+        response = await call_next(request)
+        try:
+            aco = response.headers.get('access-control-allow-origin')
+            acc = response.headers.get('access-control-allow-credentials')
+            log.debug("[CORS-DBG] response for %s %s: A-C-A-O=%s A-C-A-C=%s request_id=%s", method, path, aco, acc, response.headers.get('x-request-id'))
+        except Exception:
+            pass
+        return response
+
+app.add_middleware(ResponseLoggingMiddleware)
 
 install_exception_handlers(app)
 
