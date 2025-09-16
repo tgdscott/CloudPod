@@ -103,6 +103,13 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers.setdefault("X-Frame-Options", "DENY")
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        # Ensure CORS responses have explicit origin when credentials are required.
+        allowed_origins = [o.strip() for o in (os.getenv('CORS_ALLOWED_ORIGINS', 'https://app.getpodcastplus.com').split(',')) if o.strip()]
+        origin = request.headers.get('origin')
+        if origin and origin in allowed_origins:
+            response.headers['Access-Control-Allow-Origin'] = origin
+            response.headers.setdefault('Access-Control-Allow-Credentials', 'true')
+            response.headers.setdefault('Vary', 'Origin')
         response.headers.setdefault("Permissions-Policy", "camera=(), microphone=()")
         # HSTS header expected by tests
         response.headers.setdefault("Strict-Transport-Security", "max-age=15552000; includeSubDomains")

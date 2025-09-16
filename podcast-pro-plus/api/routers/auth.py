@@ -32,15 +32,33 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
 
 # --- OAuth Client Setup ---
 oauth = OAuth()
-oauth.register(
-    name='google',
-    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
-    client_id=settings.GOOGLE_CLIENT_ID,
-    client_secret=settings.GOOGLE_CLIENT_SECRET,
-    client_kwargs={
-        'scope': 'openid email profile'
-    }
-)
+
+# Helper to (re)register the Google OAuth client using the current runtime settings.
+def ensure_oauth_registered() -> None:
+    """Register or re-register the Google OAuth client using current env/settings.
+
+    We call this at request time so the registration uses the live environment
+    (useful if env vars were changed after module import or when running in
+    environments where settings may differ from build-time defaults).
+    """
+    try:
+        # Prefer explicit environment variables so runtime changes (Cloud Run)
+        # are picked up even if the Pydantic Settings instance was created at
+        # import time and holds stale defaults.
+        client_id = os.getenv('GOOGLE_CLIENT_ID') or settings.GOOGLE_CLIENT_ID
+        client_secret = os.getenv('GOOGLE_CLIENT_SECRET') or settings.GOOGLE_CLIENT_SECRET
+        oauth.register(
+            name='google',
+            server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+            client_id=client_id,
+            client_secret=client_secret,
+            client_kwargs={'scope': 'openid email profile'},
+        )
+    except Exception:
+        # oauth.register usually overwrites an existing registration; if it
+        # fails for any reason we swallow the error and let the calling code
+        # surface a useful HTTPException/log entry.
+        logger.exception("Failed to register Google OAuth client at runtime")
 
 # --- Helper Functions ---
 def create_access_token(data: dict, expires_delta: timedelta | None = None):
@@ -152,6 +170,65 @@ async def login_for_access_token(
         logger.info("Issued access token for %s (could not compute token hint)", user.email)
     return {"access_token": access_token, "token_type": "bearer"}
 
+
+from pydantic import BaseModel, EmailStr
+
+class LoginRequest(BaseModel):
+    """Request body for JSON-based login."""
+    email: EmailStr
+    password: str
+
+
+@router.post("/login", response_model=dict)
+async def login_for_access_token_json(
+    payload: LoginRequest,
+    session: Session = Depends(get_session),
+) -> dict:
+    """
+    Login user with email/password provided in a JSON body and return an access token.
+
+    This endpoint accepts a JSON payload:
+      {
+        "email": "user@example.com",
+        "password": "secret"
+      }
+    and returns the same response as the standard OAuth2 /token endpoint:
+      {
+        "access_token": "<token>",
+        "token_type": "bearer"
+      }
+    """
+    user = crud.get_user_by_email(session=session, email=payload.email)
+    if not user or not verify_password(payload.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    # Update last_login
+    user.last_login = datetime.utcnow()
+    session.add(user)
+    session.commit()
+
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.email}, expires_delta=access_token_expires
+    )
+    # Log issuance for debugging (token hint only)
+    try:
+        token_hint = access_token[:20] + ("..." if len(access_token) > 20 else "")
+        logger.info(
+            "Issued JSON login access token for %s token_hint=%s len=%d",
+            user.email,
+            token_hint,
+            len(access_token),
+        )
+    except Exception:
+        logger.info(
+            "Issued JSON login access token for %s (could not compute hint)", user.email
+        )
+    return {"access_token": access_token, "token_type": "bearer"}
+
 # --- User preference updates (first_name, last_name, timezone) ---
 from pydantic import BaseModel
 from typing import Optional
@@ -191,6 +268,9 @@ async def login_google(request: Request):
     # If you set OAUTH_BACKEND_BASE (e.g. http://127.0.0.1:8000) we use that, else derive.
     backend_base = os.getenv("OAUTH_BACKEND_BASE") or "http://127.0.0.1:8000"
     redirect_uri = f"{backend_base}/api/auth/google/callback"
+    # Ensure client registration reflects current settings (env vars may have
+    # been updated after module import).
+    ensure_oauth_registered()
     return await oauth.google.authorize_redirect(request, redirect_uri)  # type: ignore[attr-defined]
 
 @router.get('/google/callback')
@@ -199,6 +279,7 @@ async def auth_google_callback(request: Request, session: Session = Depends(get_
     Reverted to original simple implementation (no extra diagnostics) to restore prior working behavior.
     """
     try:
+        ensure_oauth_registered()
         token = await oauth.google.authorize_access_token(request)  # type: ignore[attr-defined]
     except Exception as e:
         # Preserve original behavior, add optional debug detail

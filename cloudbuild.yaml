@@ -6,7 +6,6 @@ substitutions:
   _REGION: us-west1
   _SERVICE: podcast-web-524304361363
   _AR_REPO: cloud-run
-  _DATABASE_URL: database_url:latest
   _MEDIA_ROOT: /tmp
   _SHORT_SHA: 'local'
 
@@ -38,14 +37,7 @@ steps:
       - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE}:latest'
 
   # Seed the database
-  - name: 'python:3.12-slim'
-    entrypoint: 'bash'
-    args:
-      - '-c'
-      - |
-        pip install -r podcast-pro-plus/requirements.txt
-        python seed_db.py
-    secretEnv: ['DATABASE_URL']
+  # (removed) database seeding step to avoid side-effects during deploys
 
   # Deploy to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
@@ -58,9 +50,6 @@ steps:
       - '--region=${_REGION}'
       - '--platform=managed'
       - '--set-env-vars=ADMIN_EMAIL=scott@scottgerhardt.com,MEDIA_ROOT=${_MEDIA_ROOT}'
-      - '--set-secrets=DATABASE_URL=${_DATABASE_URL}'
+  # NOTE: secrets removed from this Cloud Build deploy step to avoid requiring secret access here
 
-availableSecrets:
-  secretManager:
-  - versionName: projects/podcast612/secrets/database_url/versions/latest
-    env: 'DATABASE_URL'
+# availableSecrets removed (no secret references in this build config)
