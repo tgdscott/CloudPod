@@ -228,6 +228,32 @@ def readyz():
     except Exception as e:
         return JSONResponse(status_code=500, content={"ok": False, "error": str(e)})
 
+# --- Minimal debug: reveal masked Google client id observed at runtime ---
+def _mask(val: str | None) -> str:
+    try:
+        v = (val or "").strip()
+        if not v:
+            return ""
+        return (v[:8] + "…" if len(v) > 8 else v)
+    except Exception:
+        return ""
+
+@app.get("/api/debug/google-id", include_in_schema=False)
+def debug_google_id():
+    env_cid = os.getenv("GOOGLE_CLIENT_ID") or ""
+    try:
+        from api.core.config import settings as _settings
+        cfg_cid = getattr(_settings, "GOOGLE_CLIENT_ID", "")
+    except Exception:
+        cfg_cid = ""
+    return {
+        "env_client_id_hint": _mask(env_cid),
+        "settings_client_id_hint": _mask(cfg_cid),
+        "using_env": bool(env_cid),
+        "placeholder_env": env_cid.startswith("YOUR_") if env_cid else None,
+        "placeholder_settings": cfg_cid.startswith("YOUR_") if cfg_cid else None,
+    }
+
 # Re-export so legacy imports of api.main:_compute_pt_expiry (via api.app) still work
 __all__ = ["app", "_compute_pt_expiry"]
 

@@ -31,34 +31,24 @@ router = APIRouter(
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
 
 # --- OAuth Client Setup ---
-oauth = OAuth()
+# Build a fresh OAuth client per request to avoid stale placeholder config.
+def _build_oauth_client() -> tuple[OAuth, str]:
+    """Construct a new OAuth client registered for Google with live env vars.
 
-# Helper to (re)register the Google OAuth client using the current runtime settings.
-def ensure_oauth_registered() -> None:
-    """Register or re-register the Google OAuth client using current env/settings.
-
-    We call this at request time so the registration uses the live environment
-    (useful if env vars were changed after module import or when running in
-    environments where settings may differ from build-time defaults).
+    Returns a tuple of (oauth_client, client_id) where client_id is the value
+    used, helpful for diagnostic logging.
     """
-    try:
-        # Prefer explicit environment variables so runtime changes (Cloud Run)
-        # are picked up even if the Pydantic Settings instance was created at
-        # import time and holds stale defaults.
-        client_id = os.getenv('GOOGLE_CLIENT_ID') or settings.GOOGLE_CLIENT_ID
-        client_secret = os.getenv('GOOGLE_CLIENT_SECRET') or settings.GOOGLE_CLIENT_SECRET
-        oauth.register(
-            name='google',
-            server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
-            client_id=client_id,
-            client_secret=client_secret,
-            client_kwargs={'scope': 'openid email profile'},
-        )
-    except Exception:
-        # oauth.register usually overwrites an existing registration; if it
-        # fails for any reason we swallow the error and let the calling code
-        # surface a useful HTTPException/log entry.
-        logger.exception("Failed to register Google OAuth client at runtime")
+    client_id = os.getenv('GOOGLE_CLIENT_ID') or settings.GOOGLE_CLIENT_ID
+    client_secret = os.getenv('GOOGLE_CLIENT_SECRET') or settings.GOOGLE_CLIENT_SECRET
+    o = OAuth()
+    o.register(
+        name='google',
+        server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+        client_id=client_id,
+        client_secret=client_secret,
+        client_kwargs={'scope': 'openid email profile'},
+    )
+    return o, client_id
 
 # --- Helper Functions ---
 def create_access_token(data: dict, expires_delta: timedelta | None = None):
@@ -268,10 +258,25 @@ async def login_google(request: Request):
     # If you set OAUTH_BACKEND_BASE (e.g. http://127.0.0.1:8000) we use that, else derive.
     backend_base = os.getenv("OAUTH_BACKEND_BASE") or "http://127.0.0.1:8000"
     redirect_uri = f"{backend_base}/api/auth/google/callback"
-    # Ensure client registration reflects current settings (env vars may have
-    # been updated after module import).
-    ensure_oauth_registered()
-    return await oauth.google.authorize_redirect(request, redirect_uri)  # type: ignore[attr-defined]
+    # Build a fresh client reflecting current env (avoids stale placeholders).
+    oauth_client, cid = _build_oauth_client()
+    # Add detailed debug logs to help diagnose why authorize_redirect may not
+    # be returning a redirect Location header in production.
+    logger.info("login_google: initiating authorize_redirect redirect_uri=%s client_id_hint=%s", redirect_uri, (cid[:8] + "..." if cid else ""))
+    try:
+        resp = await oauth_client.google.authorize_redirect(request, redirect_uri)  # type: ignore[attr-defined]
+        try:
+            status_code = getattr(resp, 'status_code', None)
+            headers = dict(getattr(resp, 'headers', {}) or {})
+        except Exception:
+            status_code = None
+            headers = None
+        logger.info("login_google: authorize_redirect returned type=%s status=%s headers=%s", type(resp), status_code, headers)
+        return resp
+    except Exception as e:
+        logger.exception("login_google: authorize_redirect raised an exception: %s", e)
+        # Surface a minimal 500 so callers see an error and we have logs to inspect.
+        raise HTTPException(status_code=500, detail="OAuth redirect failed")
 
 @router.get('/google/callback')
 async def auth_google_callback(request: Request, session: Session = Depends(get_session)):
@@ -279,8 +284,9 @@ async def auth_google_callback(request: Request, session: Session = Depends(get_
     Reverted to original simple implementation (no extra diagnostics) to restore prior working behavior.
     """
     try:
-        ensure_oauth_registered()
-        token = await oauth.google.authorize_access_token(request)  # type: ignore[attr-defined]
+        oauth_client, cid = _build_oauth_client()
+        logger.info("google_callback: exchanging code with client_id_hint=%s", (cid[:8] + "..." if cid else ""))
+        token = await oauth_client.google.authorize_access_token(request)  # type: ignore[attr-defined]
     except Exception as e:
         # Preserve original behavior, add optional debug detail
         logger.exception("Google OAuth token exchange failed")
@@ -304,8 +310,8 @@ async def auth_google_callback(request: Request, session: Session = Depends(get_
                         token_url,
                         data={
                             "code": code,
-                            "client_id": settings.GOOGLE_CLIENT_ID,
-                            "client_secret": settings.GOOGLE_CLIENT_SECRET,
+                            "client_id": os.getenv('GOOGLE_CLIENT_ID') or settings.GOOGLE_CLIENT_ID,
+                            "client_secret": os.getenv('GOOGLE_CLIENT_SECRET') or settings.GOOGLE_CLIENT_SECRET,
                             "redirect_uri": redirect_uri,
                             "grant_type": "authorization_code",
                         },
@@ -424,3 +430,28 @@ async def read_users_me(current_user: User = Depends(get_current_user)):
 @router.get("/auth/users/me", response_model=UserPublic)
 async def read_users_me_alias(current_user: User = Depends(get_current_user)):
     return await read_users_me(current_user)  # type: ignore[misc]
+
+# --- Debug endpoint: reveal which Google client_id is active (masked) ---
+def _mask(val: str | None) -> str:
+    try:
+        v = (val or "").strip()
+        if not v:
+            return ""
+        return (v[:8] + "…" if len(v) > 8 else v)
+    except Exception:
+        return ""
+
+@router.get("/debug/google-client", include_in_schema=False)
+async def debug_google_client():
+    env_cid = os.getenv("GOOGLE_CLIENT_ID") or ""
+    cfg_cid = settings.GOOGLE_CLIENT_ID
+    backend_base = os.getenv("OAUTH_BACKEND_BASE") or "http://127.0.0.1:8000"
+    redirect_uri = f"{backend_base}/api/auth/google/callback"
+    return {
+        "client_id_env_hint": _mask(env_cid),
+        "client_id_settings_hint": _mask(cfg_cid),
+        "using_env": bool(env_cid),
+        "is_placeholder_env": env_cid.startswith("YOUR_") if env_cid else None,
+        "is_placeholder_settings": cfg_cid.startswith("YOUR_"),
+        "redirect_uri": redirect_uri,
+    }

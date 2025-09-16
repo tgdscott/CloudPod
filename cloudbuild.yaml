@@ -49,7 +49,8 @@ steps:
       - '--image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE}:$_SHORT_SHA'
       - '--region=${_REGION}'
       - '--platform=managed'
-      - '--set-env-vars=ADMIN_EMAIL=scott@scottgerhardt.com,MEDIA_ROOT=${_MEDIA_ROOT}'
+      # Use update-env-vars so we don't wipe previously configured vars like GOOGLE_CLIENT_ID
+      - '--update-env-vars=ADMIN_EMAIL=scott@scottgerhardt.com,MEDIA_ROOT=${_MEDIA_ROOT}'
   # NOTE: secrets removed from this Cloud Build deploy step to avoid requiring secret access here
 
 # availableSecrets removed (no secret references in this build config)
