@@ -1,1 +1,101 @@
+# Aggressive .gitignore for CloudPod
+# - Ignores virtual environments, caches, build artifacts, node modules
+# - Ignores media folders, large exports, DB files, logs and local secrets
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+env/
+venv/
+.venv/
+ENV/
+env.bak/
+pip-wheel-metadata/
+*.egg-info/
+build/
+dist/
+
+# Pytest / coverage
+.pytest_cache/
+coverage.xml
+.coverage
+htmlcov/
+
+# mypy/cache
+.mypy_cache/
+
+# Packaging
+*.egg
+
+# Editor directories and files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Frontend builds
+/frontend/dist/
+/frontend/build/
+
+# Local environment variables / secrets
+.env
+.env.*
+secrets/*.key
+*.pem
+*.crt
+
+# Databases and local storage
+*.sqlite3
+*.db
+database.db
+database.sqlite
+
+# Logs and runtime files
+*.log
+logs/
+*.pid
+*.seed
+
+# Media and large generated content
+media_uploads/
+cleaned_audio/
+edited_audio/
+final_episodes/
+transcripts/
+
+# Temporary and backup files
+*.bak
+*.tmp
+*.swp
+
+# Docker
+.dockerignore
+docker-compose.override.yml
+
+# Google Cloud and local SDKs
+.config/gcloud/
+gcloud-*
+
+# Build outputs, coverage, caches
+.cache/
+dist/
+node_modules/
+
+# Ignore environment for editors
+*.vsix
+
+# End of aggressive .gitignore
 node_modules
