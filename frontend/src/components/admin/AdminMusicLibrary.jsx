@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Play, Pause, Plus, Trash2, Save } from 'lucide-react';
 import { useAuth } from '@/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { makeApi } from '@/lib/apiClient';
 
 export default function AdminMusicLibrary() {
   const { token } = useAuth();
@@ -19,13 +20,14 @@ export default function AdminMusicLibrary() {
 
   const auth = token ? { Authorization: `Bearer ${token}` } : {};
 
-  const loadAssets = () => {
+  const loadAssets = async () => {
     setLoading(true);
-    fetch('/api/admin/music/assets', { headers: { ...auth }})
-      .then(r => r.ok ? r.json() : Promise.reject())
-      .then(data => setAssets(Array.isArray(data?.assets) ? data.assets : []))
-      .catch(() => setAssets([]))
-      .finally(() => setLoading(false));
+    try {
+      const data = await makeApi(token).get('/api/admin/music/assets');
+      setAssets(Array.isArray(data?.assets) ? data.assets : []);
+    } catch {
+      setAssets([]);
+    } finally { setLoading(false); }
   };
 
   useEffect(() => { loadAssets(); }, []);
@@ -65,7 +67,7 @@ export default function AdminMusicLibrary() {
     }
     if (!confirm('Delete this music asset?')) return;
     try {
-      await fetch(`/api/admin/music/assets/${asset.id}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json', ...auth }});
+  await makeApi(token).raw(`/api/admin/music/assets/${asset.id}`, { method: 'DELETE' });
       setAssets(prev => prev.filter(a => a.id !== asset.id));
       try { toast({ title: 'Deleted', description: `${asset.display_name || 'Asset'} removed.` }); } catch {}
     } catch (e) {
@@ -78,11 +80,11 @@ export default function AdminMusicLibrary() {
     try {
       const body = { display_name: asset.display_name, url: asset.url, preview_url: asset.preview_url || asset.url, mood_tags: asset.mood_tags || [] };
       if (String(asset.id).startsWith('new-')) {
-        const r = await fetch('/api/admin/music/assets', { method: 'POST', headers: { 'Content-Type': 'application/json', ...auth }, body: JSON.stringify(body) });
-        if (!r.ok) throw new Error('Create failed');
+  const r = await makeApi(token).post('/api/admin/music/assets', body);
+  if (r && r.status && r.status >= 400) throw new Error('Create failed');
       } else {
-        const r = await fetch(`/api/admin/music/assets/${asset.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...auth }, body: JSON.stringify(body) });
-        if (!r.ok) throw new Error('Update failed');
+  const r = await makeApi(token).put(`/api/admin/music/assets/${asset.id}`, body);
+  if (r && r.status && r.status >= 400) throw new Error('Update failed');
       }
       try { toast({ title: 'Saved', description: 'Music asset saved.' }); } catch {}
       loadAssets();

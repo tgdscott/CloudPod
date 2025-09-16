@@ -1,13 +1,16 @@
 import React, { createContext, useState, useContext, useEffect, useCallback, useRef } from 'react';
-
-const API_BASE_URL = (import.meta?.env?.VITE_API_BASE) || 'https://api.getpodcastplus.com'; // Define your API base URL here
+import { makeApi } from './lib/apiClient';
 
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
-    const [token, setToken] = useState(localStorage.getItem('authToken'));
+    const [token, setToken] = useState(() => {
+        try { return localStorage.getItem('authToken'); } catch { return null; }
+    });
     const [user, setUser] = useState(null);
     const [backendOnline, setBackendOnline] = useState(true);
+    const [hydrated, setHydrated] = useState(false); // whether we've successfully attempted to load /me
+
     const refreshInFlight = useRef(false);
     const errorCountRef = useRef(0);
     const lastAttemptRef = useRef(0);
@@ -15,10 +18,14 @@ export const AuthProvider = ({ children }) => {
     const maxBackoff = 60000; // 60s cap
 
     useEffect(() => {
-        if (token) {
-            localStorage.setItem('authToken', token);
-        } else {
-            localStorage.removeItem('authToken');
+        try {
+            if (token) {
+                localStorage.setItem('authToken', token);
+            } else {
+                localStorage.removeItem('authToken');
+            }
+        } catch (e) {
+            // ignore storage failures
         }
     }, [token]);
 
@@ -29,10 +36,12 @@ export const AuthProvider = ({ children }) => {
     const logout = () => {
         setToken(null);
         setUser(null);
+        setHydrated(true);
     };
 
     const refreshUser = useCallback(async (opts={ force:false }) => {
-        if(!token) { setUser(null); return; }
+        // If no token present, ensure user cleared and mark hydrated
+        if(!token) { setUser(null); setHydrated(true); return; }
         const now = Date.now();
         // Respect cooldown when backend offline unless force
         if(!opts.force && !backendOnline) {
@@ -45,32 +54,28 @@ export const AuthProvider = ({ children }) => {
         refreshInFlight.current = true;
         lastAttemptRef.current = now;
         try {
-            const r = await fetch('/api/users/me', { headers: { Authorization:`Bearer ${token}` }});
-            if(r.ok) {
-                const data = await r.json();
-                setUser(data);
-                if(!backendOnline) {
-                    setBackendOnline(true);
-                }
-                errorCountRef.current = 0;
-                backoffRef.current = 2000; // reset backoff
-            } else {
-                if(r.status === 401) {
-                    // Token invalid/expired – clear it so app falls back to landing page immediately
-                    setUser(null);
-                    setToken(null);
-                    return;
-                }
-                if(backendOnline) setBackendOnline(false); // mark offline on non-ok (likely 502/500 when gateway)
-            }
+            const api = makeApi(token);
+            const data = await api.get('/api/users/me');
+            // data should be JSON user object
+            setUser(data);
+            setBackendOnline(true);
+            errorCountRef.current = 0;
+            backoffRef.current = 2000; // reset backoff
+            setHydrated(true);
         } catch(err) {
-            if(backendOnline) setBackendOnline(false);
-            if(errorCountRef.current < 5) {
-                // eslint-disable-next-line no-console
-                console.warn('[Auth] refreshUser failed; will not auto-retry', err.message || err);
+            // Only clear token on explicit 401 Unauthorized
+            if(err && err.status === 401) {
+                setUser(null);
+                setToken(null);
+                setHydrated(true);
+                return;
             }
+            // non-auth failures: mark backend offline and backoff
+            if(backendOnline) setBackendOnline(false);
             errorCountRef.current += 1;
             backoffRef.current = Math.min(backoffRef.current * 2, maxBackoff);
+            // keep hydrated true to allow UI to continue (we attempted)
+            setHydrated(true);
         } finally {
             refreshInFlight.current = false;
         }
@@ -90,7 +95,7 @@ export const AuthProvider = ({ children }) => {
         return () => window.removeEventListener('ppp-token-captured', onCaptured);
     }, [token]);
 
-    const value = { token, user, login, logout, refreshUser, isAuthenticated: !!token, backendOnline };
+    const value = { token, user, login, logout, refreshUser, isAuthenticated: !!token, backendOnline, hydrated };
 
     return (
         <AuthContext.Provider value={value}>

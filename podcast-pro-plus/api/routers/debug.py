@@ -13,22 +13,30 @@ STARTED_AT = datetime.utcnow().isoformat() + "Z"
 
 @router.get("/info")
 def debug_info(session: Session = Depends(get_session)):
-    # Check columns existence via PRAGMA
+    try:
+        cloudsql_entries = os.listdir("/cloudsql")
+    except Exception as e:
+        cloudsql_entries = [f"<err {e}>"]
+    socket_path = f"/cloudsql/{os.getenv('INSTANCE_CONNECTION_NAME', 'podcast612:us-west1:podcast-db')}"
+    socket_exists = os.path.exists(socket_path)
+
     cols = {}
-    for tbl in ("podcast", "episode", "user"):
-        try:
-            r = session.exec(text(f"PRAGMA table_info({tbl})"))
-            cols[tbl] = [row[1] for row in r]
-        except Exception as e:
-            cols[tbl] = [f"<err {e}>"]
-    # Basic counts
     counts = {}
-    for model, name in ((Podcast, "podcast"), (Episode, "episode")):
-        try:
-            counts[name] = session.query(model).count()
-        except Exception:
-            counts[name] = None
-    # Introspect a few loaded modules
+    try:
+        for tbl in ("podcast", "episode", "user"):
+            try:
+                r = session.exec(text(f"SELECT * FROM {tbl} LIMIT 1"))
+                cols[tbl] = list(r.keys()) if r.keys() else []
+            except Exception as e:
+                cols[tbl] = [f"<err {e}>"]
+        for model, name in ((Podcast, "podcast"), (Episode, "episode")):
+            try:
+                counts[name] = session.query(model).count()
+            except Exception:
+                counts[name] = None
+    except Exception as db_exc:
+        cols.setdefault('error', str(db_exc))
+
     loaded = {}
     for mod_name in ("api.routers.episodes", "api.routers.podcasts", "api.models.podcast"):
         try:
@@ -43,6 +51,12 @@ def debug_info(session: Session = Depends(get_session)):
         "counts": counts,
         "loaded_module_files": loaded,
         "env_pythonpath": os.environ.get("PYTHONPATH"),
+        "cloudsql_entries": cloudsql_entries,
+        "socket_path": socket_path,
+        "socket_exists": socket_exists,
+        "pg_host": os.environ.get("PGHOST"),
+        "instance_connection_name": os.environ.get("INSTANCE_CONNECTION_NAME"),
+        "database_url_env": os.environ.get("DATABASE_URL"),
     }
 
 @router.get("/podcast-fields")
@@ -51,7 +65,6 @@ def podcast_fields(session: Session = Depends(get_session)):
     if not p:
         return {"podcast": None}
     data = p.model_dump()
-    # Include dynamic attributes possibly not in dump
     for attr in ("rss_url_locked", "contact_email", "spreaker_show_id"):
         data[attr] = getattr(p, attr, None)
     return {"podcast": data}

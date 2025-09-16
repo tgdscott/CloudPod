@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from "@/hooks/use-toast";
+import { makeApi } from '@/lib/apiClient';
 import { CheckCircle } from 'lucide-react';
 
 const WizardStep = ({ children }) => <div className="py-4">{children}</div>;
@@ -62,24 +63,12 @@ const NewUserWizard = ({ open, onOpenChange, token, onPodcastCreated }) => {
 
   const handleConnectSpreaker = async () => {
     try {
-      const response = await fetch('/api/spreaker/auth/login', { 
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (!response.ok) throw new Error('Could not start the Spreaker connection process.');
-      const { auth_url } = await response.json();
-      
+      const { auth_url } = await makeApi(token).get('/api/spreaker/auth/login');
       const popup = window.open(auth_url, 'spreakerAuth', 'width=600,height=700');
-      
       const timer = setInterval(() => {
         if (!popup || popup.closed) {
           clearInterval(timer);
-          fetch("/api/auth/users/me", { headers: { 'Authorization': `Bearer ${token}` } })
-            .then(res => res.json())
-            .then(user => {
-              if(user.spreaker_access_token) {
-                setIsSpreakerConnected(true);
-              }
-            });
+          makeApi(token).get('/api/auth/users/me').then(user => { if (user?.spreaker_access_token) setIsSpreakerConnected(true); }).catch(()=>{});
         }
       }, 1000);
 
@@ -91,15 +80,7 @@ const NewUserWizard = ({ open, onOpenChange, token, onPodcastCreated }) => {
   const handleFinish = async () => {
     try {
       if (formData.elevenlabsApiKey) {
-        const keyRes = await fetch('/api/users/me/elevenlabs-key', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-          body: JSON.stringify({ api_key: formData.elevenlabsApiKey }),
-        });
-        // Do not block wizard on BYOK save failure; just notify.
-        if (!keyRes.ok) {
-          try { toast({ variant: 'destructive', title: 'ElevenLabs key not saved', description: 'You can add it later in Settings.' }); } catch {}
-        }
+        try { await makeApi(token).put('/api/users/me/elevenlabs-key', { api_key: formData.elevenlabsApiKey }); } catch { try { toast({ variant: 'destructive', title: 'ElevenLabs key not saved', description: 'You can add it later in Settings.' }); } catch {} }
       }
 
       const podcastPayload = new FormData();
@@ -109,17 +90,9 @@ const NewUserWizard = ({ open, onOpenChange, token, onPodcastCreated }) => {
         podcastPayload.append('cover_image', formData.coverArt);
       }
 
-      const podcastRes = await fetch('/api/podcasts/', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
-        body: podcastPayload,
-      });
-
-      if (!podcastRes.ok) {
-        const errorData = await podcastRes.json();
-        throw new Error(errorData.detail || 'Failed to create the podcast show.');
-      }
-      const newPodcast = await podcastRes.json();
+      const podcastRes = await makeApi(token).raw('/api/podcasts/', { method: 'POST', body: podcastPayload });
+      if (podcastRes && podcastRes.status && podcastRes.status >= 400) { const errorData = podcastRes; throw new Error(errorData.detail || 'Failed to create the podcast show.'); }
+      const newPodcast = podcastRes;
 
   toast({ title: "Success!", description: "Your new podcast show has been created." });
       onPodcastCreated(newPodcast); // Pass the new podcast object back to the parent

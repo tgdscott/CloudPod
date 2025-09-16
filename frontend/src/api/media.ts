@@ -28,18 +28,11 @@ function friendlyMessage(status: number, raw: any): string {
   return 'Request failed. Please check your input and try again.';
 }
 
+import { makeApi } from '@/lib/apiClient';
+
 export async function createTTS(payload: CreateTTSPayload): Promise<MediaItemDTO> {
-  const r = await fetch('/api/media/tts', {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  if (!r.ok) {
-    const text = await r.text().catch(() => '');
-    throw new Error(friendlyMessage(r.status, text));
-  }
-  const data = await r.json();
+  const r = await makeApi().post('/api/media/tts', payload);
+  const data = r;
   // Some backends wrap payloads; normalize the common cases
   const item = Array.isArray(data) ? data[0] : (data?.item || data);
   if (!item?.filename) throw new Error('TTS succeeded but no file was returned.');

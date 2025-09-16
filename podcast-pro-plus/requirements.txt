@@ -9,3 +9,18 @@ sqlmodel
 sqlalchemy
 httpx
 email-validator
+itsdangerous
+pydantic-settings
+requests
+google-cloud-speech
+pydub
+
+# Required by various routers: JWT handling, password hashing, and feed parsing
+python-jose[cryptography]
+passlib[bcrypt]
+feedparser
+stripe
+psycopg[binary]>=3.2
+celery
+google-cloud-storage
+authlib

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/AuthContext.jsx";
 import { useToast } from "@/hooks/use-toast";
+import { makeApi } from '@/lib/apiClient';
 import AdminFeatureToggles from "@/components/admin/AdminFeatureToggles.jsx";
 
 export default function AdminSettings() {
@@ -15,20 +16,14 @@ export default function AdminSettings() {
 
   useEffect(() => {
     (async () => {
-      try {
+        try {
         // Only attempt admin fetch if user is known admin; otherwise skip noisy 403s
         if (!(user && (user.is_admin || user.role === 'admin'))) {
           setIsAdmin(false);
           return;
         }
-        const r = await fetch('/api/admin/settings', { headers: { Authorization: `Bearer ${token}` }});
-        if (r.ok) {
-          const data = await r.json();
-          setIsAdmin(true);
-          setTestMode(!!data.test_mode);
-        } else if (r.status === 403) {
-          setIsAdmin(false);
-        }
+        const data = await makeApi(token).get('/api/admin/settings');
+        if (data) { setIsAdmin(true); setTestMode(!!data.test_mode); } else { setIsAdmin(false); }
       } catch {}
     })();
   }, [token, user]);

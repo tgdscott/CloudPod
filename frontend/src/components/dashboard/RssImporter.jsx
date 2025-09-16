@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { ArrowLeft, Loader2, Rss } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { makeApi } from '@/lib/apiClient';
 
 export default function RssImporter({ onBack, token }) {
     const [rssUrl, setRssUrl] = useState("");
@@ -18,27 +19,10 @@ export default function RssImporter({ onBack, token }) {
         }
         setIsLoading(true);
         try {
-            const response = await fetch('/api/import/rss', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ rss_url: rssUrl })
-            });
-
-            const result = await response.json();
-
-            if (!response.ok) {
-                throw new Error(result.detail || "Failed to import from RSS feed.");
-            }
-            
-            toast({
-                title: "Import Successful!",
-                description: `Imported "${result.podcast_name}" with ${result.episodes_imported} episodes.`
-            });
-            onBack(); // Go back to the dashboard after a successful import
-
+            const result = await makeApi(token).post('/api/import/rss', { rss_url: rssUrl });
+            if (result && result.status && result.status >= 400) throw new Error(result.detail || 'Failed to import from RSS feed.');
+            toast({ title: "Import Successful!", description: `Imported "${result.podcast_name}" with ${result.episodes_imported} episodes.` });
+            onBack();
         } catch (err) {
             toast({ title: "Import Failed", description: err.message, variant: "destructive" });
         } finally {

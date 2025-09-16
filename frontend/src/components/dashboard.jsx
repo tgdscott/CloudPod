@@ -117,18 +117,68 @@ export default function PodcastPlusDashboard() {
     try {
       setStatsError(null);
       const api = makeApi(token);
-      const [templatesData, podcastsData, statsData] = await Promise.all([
+      // Use allSettled so that missing optional endpoints (404) don't cause
+      // the whole fetch to reject and force a logout. Only treat 401 as fatal.
+      const results = await Promise.allSettled([
         api.get('/api/templates/'),
         api.get('/api/podcasts/'),
-        api.get('/api/dashboard/stats').catch(e => { setStatsError('Failed to load stats.'); return null; }),
+        api.get('/api/dashboard/stats'),
       ]);
-      setTemplates(templatesData);
-      setPodcasts(podcastsData);
-      setStats(statsData);
+
+      const [templatesRes, podcastsRes, statsRes] = results;
+
+      // Templates
+      if (templatesRes.status === 'fulfilled') {
+        setTemplates(templatesRes.value);
+      } else {
+        const reason = templatesRes.reason || {};
+        if (reason.status === 401) {
+          // Authorization failure -> force logout
+          console.warn('Templates fetch unauthorized, logging out', reason);
+          logout();
+          return;
+        }
+        console.warn('Failed to load templates (non-fatal):', reason);
+        setTemplates([]);
+      }
+
+      // Podcasts
+      if (podcastsRes.status === 'fulfilled') {
+        setPodcasts(podcastsRes.value);
+      } else {
+        const reason = podcastsRes.reason || {};
+        if (reason.status === 401) {
+          console.warn('Podcasts fetch unauthorized, logging out', reason);
+          logout();
+          return;
+        }
+        console.warn('Failed to load podcasts (non-fatal):', reason);
+        setPodcasts([]);
+      }
+
+      // Stats (optional)
+      if (statsRes.status === 'fulfilled') {
+        setStats(statsRes.value);
+      } else {
+        const reason = statsRes.reason || {};
+        if (reason.status === 401) {
+          console.warn('Stats fetch unauthorized, logging out', reason);
+          logout();
+          return;
+        }
+        // Non-fatal: show a gentle UI message
+        console.warn('Failed to load stats (non-fatal):', reason);
+        setStatsError('Failed to load stats.');
+        setStats(null);
+      }
     } catch (err) {
-      setStatsError('Failed to load dashboard data.');
-      console.error("Failed to fetch dashboard data:", err);
-      logout();
+      // Unexpected error: don't immediately force logout unless it's a 401
+      console.error("Unexpected error fetching dashboard data:", err);
+      if (err && err.status === 401) {
+        logout();
+      } else {
+        setStatsError('Failed to load dashboard data.');
+      }
     }
   };
 

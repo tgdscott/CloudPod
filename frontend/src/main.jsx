@@ -12,6 +12,37 @@ import Onboarding from '@/pages/Onboarding.jsx';
 import { AuthProvider } from './AuthContext.jsx';
 import { BrandProvider } from './brand/BrandContext.jsx';
 import './index.css' // <-- This line imports all the styles
+import { assetUrl } from './lib/apiClient';
+
+// Runtime safeguard: some code (or older bundles) may call fetch('/api/...') expecting
+// the API to be on a separate origin. If VITE_API_BASE is configured we should ensure
+// these relative calls get routed to the API host rather than the SPA origin which
+// would otherwise respond with index.html. We do this by wrapping window.fetch once.
+try {
+  if (typeof window !== 'undefined' && window.fetch) {
+    const originalFetch = window.fetch.bind(window);
+    window.fetch = async (input, init) => {
+      try {
+        // Normalize input to a string path when possible
+        const urlStr = typeof input === 'string' ? input : (input && input.url) || '';
+        if (urlStr && (urlStr.startsWith('/api/') || urlStr === '/api' || urlStr.startsWith('/api?') || urlStr.startsWith('/api/'))) {
+          const newUrl = assetUrl(urlStr);
+          // If original input was a Request, clone it with the new URL
+          if (input instanceof Request) {
+            input = new Request(newUrl, input);
+          } else {
+            input = newUrl;
+          }
+        }
+      } catch (e) {
+        // If anything goes wrong, fall back to original behavior
+      }
+      return originalFetch(input, init);
+    };
+  }
+} catch (err) {
+  // ignore; this is a best-effort runtime shim
+}
 
 // --- One-time hash fragment token capture (e.g. from Google OAuth redirect) ---
 // Expected format: #access_token=...&token_type=bearer

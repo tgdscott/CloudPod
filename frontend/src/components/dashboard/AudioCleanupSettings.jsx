@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/AuthContext';
+import { makeApi } from '@/lib/apiClient';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -55,10 +56,8 @@ export default function AudioCleanupSettings({ className }) {
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      const r = await fetch('/api/users/me/audio-cleanup-settings', { headers: { ...authHeaders }});
-      if(!r.ok) throw new Error('Failed to load settings');
-      const data = await r.json();
-      const raw = data.settings || {};
+      const data = await makeApi(token).get('/api/users/me/audio-cleanup-settings');
+      const raw = data?.settings || {};
       // Merge in default command shapes so flubber/intern always exist with sane defaults
       const base = (raw && Object.keys(raw).length) ? raw : DEFAULT_SETTINGS;
       const merged = {
@@ -79,9 +78,8 @@ export default function AudioCleanupSettings({ className }) {
   useEffect(() => {
     const run = async () => {
       try {
-        const r = await fetch('/api/media/', { headers: { ...authHeaders } });
-        if (!r.ok) return;
-        const files = await r.json();
+        const files = await makeApi(token).get('/api/media/');
+        if (!files) return;
         const sfx = (files || []).filter(f => (f.category === 'sfx'));
         // Map to dropdown options: label from friendly_name or filename (nice), value = media_uploads/filename
         const opts = sfx.map(f => ({
@@ -100,7 +98,7 @@ export default function AudioCleanupSettings({ className }) {
   const removeCommand = (name) => { setSettings(s => { const next = { ...(s.commands||{}) }; delete next[name]; return { ...s, commands: next }; }); setDirty(true); };
   const addCommand = () => { const n = newCommandName.trim().toLowerCase().replace(/\s+/g,'_'); if(!n || settings.commands?.[n]) return; update({ commands: { ...(settings.commands||{}), [n]: { action: 'sfx', trigger_keyword: n }}}); setNewCommandName(''); };
 
-  const save = async () => { if(!settings) return; setSaving(true); setError(null); try { const payload = { settings }; const r = await fetch('/api/users/me/audio-cleanup-settings', { method:'PUT', headers:{ 'Content-Type':'application/json', ...authHeaders }, body: JSON.stringify(payload) }); if(!r.ok) throw new Error('Save failed'); setDirty(false); } catch(e){ setError(e.message||String(e)); } finally { setSaving(false); } };
+  const save = async () => { if(!settings) return; setSaving(true); setError(null); try { const payload = { settings }; const r = await makeApi(token).put('/api/users/me/audio-cleanup-settings', payload); if (r && r.status && r.status >= 400) throw new Error('Save failed'); setDirty(false); } catch(e){ setError(e.message||String(e)); } finally { setSaving(false); } };
 
   // Enforce fixed beep parameters whenever censoring is enabled
   useEffect(() => {

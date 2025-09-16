@@ -60,9 +60,7 @@ export default function AppAB({ token }) {
     let abort = false;
     (async () => {
       try {
-        const res = await fetch('/api/templates/', { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-        if (!res.ok) return;
-        const data = await res.json();
+        const data = await makeApi(token).get('/api/templates/');
         if (!abort) setTemplates(Array.isArray(data) ? data : []);
       } catch {}
     })();

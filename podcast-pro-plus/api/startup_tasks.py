@@ -75,6 +75,8 @@ def _normalize_podcast_covers() -> None:
 
 def _ensure_user_subscription_column() -> None:
     """Idempotent additive migrations for SQLite tables and columns we use."""
+    if engine.url.get_backend_name() != "sqlite":
+        return
     try:
         with engine.connect() as conn:
             # --- user table

@@ -44,7 +44,7 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           context: .
-          file: Dockerfile.deploy
+          file: Dockerfile
           push: true
           tags: gcr.io/${{ secrets.GCP_PROJECT }}/podcast-web:latest
 
@@ -57,3 +57,6 @@ jobs:
           allow-unauthenticated: true
           env_vars: |-
             APP_ENV=production
+            ADMIN_EMAIL=scott@scottgerhardt.com
+            DATABASE_URL=${{ secrets.CLOUDRUN_DATABASE_URL }}
+            MEDIA_ROOT=/tmp

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/AuthContext.jsx';
+import { makeApi } from '@/lib/apiClient';
 
 // Restored: podcast format options (removed accidentally in earlier patch)
 export const FORMATS = [
@@ -102,7 +103,7 @@ export default function OnboardingWizard(){
 
   async function saveUserNames(){
     try {
-      await fetch('/api/auth/users/me/prefs', { method:'PATCH', headers:{ 'Authorization':`Bearer ${token}`, 'Content-Type':'application/json' }, body: JSON.stringify({ first_name:firstName, last_name:lastName }) });
+      await makeApi(token).patch('/api/auth/users/me/prefs', { first_name:firstName, last_name:lastName });
     } catch {}
   }
   function prevImport(){
@@ -114,13 +115,14 @@ export default function OnboardingWizard(){
   useEffect(()=>{
     if(mode==='new' && categories.length===0 && !catLoading){
       setCatLoading(true);
-      fetch('/api/spreaker/categories')
-        .then(r=> r.ok? r.json():Promise.reject('cats'))
-        .then(data=>{
-          const items = data.categories || [];
-          setCategories(items.map(it=>({ id: it.category_id || it.id || it.value, name: it.name || it.description || it.label || it.title })));})
-        .catch(()=>{})
-        .finally(()=> setCatLoading(false));
+      (async ()=>{
+        try {
+          const data = await makeApi(token).get('/api/spreaker/categories');
+          const items = data?.categories || [];
+          setCategories(items.map(it=>({ id: it.category_id || it.id || it.value, name: it.name || it.description || it.label || it.title })));
+        } catch {}
+        finally { setCatLoading(false); }
+      })();
     }
   }, [mode, categories.length, catLoading]);
 
@@ -153,11 +155,9 @@ export default function OnboardingWizard(){
   useEffect(()=>{
     if(newStep==='audioSetup' && musicAssets.length===0 && !musicLoading){
       setMusicLoading(true);
-      fetch('/api/music/assets')
-        .then(r=> r.ok? r.json():Promise.reject())
-        .then(data=>{ setMusicAssets([NO_MUSIC_OPTION, ...(data.assets||[])]); })
-        .catch(()=>{ setMusicAssets([NO_MUSIC_OPTION]); })
-        .finally(()=> setMusicLoading(false));
+      (async ()=>{
+        try { const data = await makeApi(token).get('/api/music/assets'); setMusicAssets([NO_MUSIC_OPTION, ...(data.assets||[])]); } catch { setMusicAssets([NO_MUSIC_OPTION]); } finally { setMusicLoading(false); }
+      })();
     }
   }, [newStep, musicAssets.length, musicLoading]);
 
@@ -198,14 +198,12 @@ export default function OnboardingWizard(){
   // legacy saveSpreaker removed (OAuth flow replaces manual token)
 
   async function fetchSpreakerShows({ verify=false }={}){
-    setSpreakerLoading(true);
+  setSpreakerLoading(true);
     if(verify){ setSpreakerVerifying(true); }
     setSpreakerConnectError(null);
     try {
-      const r = await fetch('/api/spreaker/shows', { headers:{ Authorization:`Bearer ${token}` }});
-      if(!r.ok) throw new Error(r.status===401? 'Not authorized with Spreaker yet':'Unable to fetch shows');
-      const data = await r.json();
-      setSpreakerShows(data.shows || []);
+  const data = await makeApi(token).get('/api/spreaker/shows');
+  setSpreakerShows(data?.shows || []);
       setSpreakerSaved(true); // success => mark connected
     } catch(e){
       // failed verification => allow retry
@@ -218,7 +216,7 @@ export default function OnboardingWizard(){
     } }
 
   async function disconnectSpreaker(){
-    try { await fetch('/api/spreaker/disconnect', { method:'POST', headers:{ Authorization:`Bearer ${token}` }}); } catch {}
+  try { await makeApi(token).post('/api/spreaker/disconnect'); } catch {}
     setSpreakerSaved(false);
     setSpreakerShows([]);
     setSpreakerConnectError(null);
@@ -228,8 +226,8 @@ export default function OnboardingWizard(){
     if(!createdPodcast) return;
     setShowInfoLoading(true); setShowInfoError(null);
     try {
-      const r = await fetch(`/api/spreaker/refresh/${createdPodcast.id}`, { method:'POST', headers:{ Authorization:`Bearer ${token}` }});
-      if(!r.ok) throw new Error('Refresh failed');
+  const r = await makeApi(token).raw(`/api/spreaker/refresh/${createdPodcast.id}`, { method:'POST' });
+  if(r && r.status && r.status >= 400) throw new Error('Refresh failed');
       // refetch full show info after refresh
       await loadRemoteShow();
     } catch(e){ setShowInfoError(e.message);} finally { setShowInfoLoading(false);} }
@@ -238,10 +236,10 @@ export default function OnboardingWizard(){
     if(!createdPodcast) return;
     setShowInfoLoading(true); setShowInfoError(null);
     try {
-      const r = await fetch(`/api/spreaker/show/${createdPodcast.id}?mapped=true`, { headers:{ Authorization:`Bearer ${token}` }});
-      if(!r.ok) throw new Error('Could not load remote show');
-      const data = await r.json();
-      setShowInfo(data.mapped || null);
+      try {
+        const data = await makeApi(token).get(`/api/spreaker/show/${createdPodcast.id}?mapped=true`);
+        setShowInfo(data?.mapped || null);
+      } catch (e) { throw new Error('Could not load remote show'); }
     } catch(e){ setShowInfoError(e.message);} finally { setShowInfoLoading(false);} }
 
   async function handleCreateAndTemplate(){
@@ -257,13 +255,13 @@ export default function OnboardingWizard(){
           fd.append('cover_image', coverFile);
         }
   // Map first three selected categories to category_id / category_2_id / category_3_id after creation via update
-  const podRes = await fetch('/api/podcasts/', { method:'POST', headers:{ Authorization:`Bearer ${token}` }, body: fd });
-        if(!podRes.ok){
+  const podRes = await makeApi(token).raw('/api/podcasts/', { method:'POST', body: fd });
+        if (podRes && podRes.status && podRes.status >= 400) {
           let detail='';
-          try { const j = await podRes.json(); detail = j.detail || JSON.stringify(j); } catch {}
+          try { detail = podRes.detail || JSON.stringify(podRes); } catch {}
           throw new Error('Podcast create failed '+detail);
         }
-        podcast = await podRes.json();
+        podcast = podRes;
         setCreatedPodcast(podcast);
       }
       const podcastId = podcast.id || podcast.podcast_id || podcast.uuid;
@@ -281,8 +279,8 @@ export default function OnboardingWizard(){
 
       // Upload intro/outro
       let introFilename=null, outroFilename=null;
-      try { if(introMode==='upload' && introFile){ const fd=new FormData(); fd.append('files', introFile); const r=await fetch('/api/media/upload/intro',{method:'POST',headers:{Authorization:`Bearer ${token}`},body:fd}); if(r.ok){const j=await r.json(); introFilename=j[0]?.filename;} } } catch{}
-      try { if(outroMode==='upload' && outroFile){ const fd=new FormData(); fd.append('files', outroFile); const r=await fetch('/api/media/upload/outro',{method:'POST',headers:{Authorization:`Bearer ${token}`},body:fd}); if(r.ok){const j=await r.json(); outroFilename=j[0]?.filename;} } } catch{}
+        try { if(introMode==='upload' && introFile){ const fd=new FormData(); fd.append('files', introFile); const r=await makeApi(token).raw('/api/media/upload/intro',{method:'POST',body:fd}); if(r && Array.isArray(r) && r[0]) { introFilename=r[0]?.filename; } } } catch{}
+      try { if(outroMode==='upload' && outroFile){ const fd=new FormData(); fd.append('files', outroFile); const r=await makeApi(token).raw('/api/media/upload/outro',{method:'POST',body:fd}); if(r && Array.isArray(r) && r[0]) { outroFilename=r[0]?.filename; } } } catch{}
       // Build segments
       const segments=[];
       if(introMode==='upload' && introFilename) segments.push({ segment_type:'intro', source:{ source_type:'static', filename:introFilename } });
@@ -291,7 +289,7 @@ export default function OnboardingWizard(){
       if(outroMode==='upload' && outroFilename) segments.push({ segment_type:'outro', source:{ source_type:'static', filename:outroFilename } });
       else if(outroMode==='script' && outroScript.trim()) segments.push({ segment_type:'outro', source:{ source_type:'tts', script:outroScript.trim(), voice_id:'default' } });
       const templateBody = { podcast_id:podcastId, name:'Default Episode', segments, background_music_rules:[], timing:{} };
-      try { await fetch('/api/templates/', { method:'POST', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token}` }, body: JSON.stringify(templateBody) }); } catch{}
+  try { await makeApi(token).post('/api/templates/', templateBody); } catch{}
       // If Spreaker token provided, attempt to load remote show info (creation attempted server-side)
       if(spreakerSaved){
         // slight delay to allow backend to create remote show
@@ -304,10 +302,9 @@ export default function OnboardingWizard(){
   async function handleImportRss(){
     setError(null);
     try {
-      const r = await fetch('/api/import/rss', { method:'POST', headers:{'Content-Type':'application/json', Authorization:`Bearer ${token}`}, body: JSON.stringify({ rss_url: rssUrl.trim() }) });
-      if(r.status===409){ setError('Already imported.'); return; }
-      if(!r.ok) throw new Error('Import failed');
-      const data = await r.json();
+      const resp = await makeApi(token).post('/api/import/rss', { rss_url: rssUrl.trim() });
+        if(resp && resp.status === 409){ setError('Already imported.'); return; }
+        const data = resp;
       setImportResult(data);
       setImportStep('importing');
       setTimeout(()=> setImportStep('analyze'), 1200); // simulate progress
@@ -553,13 +550,12 @@ export default function OnboardingWizard(){
               <div className="space-y-4 text-sm text-gray-700 mb-4">
                 <p>Sign in to Spreaker so we can set up your show and publish for you.</p>
                 <button
-                  onClick={async () => {
+                    onClick={async () => {
                     try {
-                      const resp = await fetch('/api/spreaker/auth/login', { headers:{ Authorization:`Bearer ${token}` }});
-                      if(!resp.ok) throw new Error('Auth init failed');
-                      const data = await resp.json();
-                      if(!data.auth_url) throw new Error('No auth_url');
-                      window.open(data.auth_url, 'spreakerOAuth', 'width=720,height=800');
+                      const data = await makeApi(token).get('/api/spreaker/auth/login');
+                      const auth_url = data && data.auth_url;
+                      if(!auth_url) throw new Error('Auth init failed');
+                      window.open(auth_url, 'spreakerOAuth', 'width=720,height=800');
                       const handler = (ev) => {
                         if(ev.data === 'spreaker_connected' || (ev.data && ev.data.type==='spreaker_connected')){
                           window.removeEventListener('message', handler);

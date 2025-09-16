@@ -19,6 +19,7 @@ import {
 } from "lucide-react"
 import { useState, useEffect } from "react"
 import { useAuth } from "@/AuthContext"
+import { makeApi } from '@/lib/apiClient';
 import { useBrand } from "@/brand/BrandContext.jsx";
 import Logo from "@/components/Logo.jsx";
 
@@ -35,19 +36,10 @@ const LoginModal = ({ onClose }) => {
         e.preventDefault();
         setError('');
         try {
-            const response = await fetch('/api/auth/token', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams({ username: email, password }),
-            });
-            if (response.ok) {
-                const data = await response.json();
-                login(data.access_token);
-                onClose();
-            } else {
-                const errorData = await response.json();
-                setError(errorData.detail || 'Invalid email or password.');
-            }
+          // use the api client to POST form-encoded token request
+          const res = await makeApi().raw('/api/auth/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ username: email, password }) });
+          // makeApi.raw returns parsed JSON for JSON responses
+          if (res && res.access_token) { login(res.access_token); onClose(); } else { setError('Invalid email or password.'); }
         } catch (err) {
             setError('An unexpected error occurred. Please try again.');
         }
@@ -57,18 +49,12 @@ const LoginModal = ({ onClose }) => {
         e.preventDefault();
         setError('');
         try {
-            const response = await fetch('/api/auth/register', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password })
-            });
-            if (response.ok) {
-                // Auto-login after registration
-                await handleEmailLogin(e);
-            } else {
-                const errorData = await response.json().catch(() => ({}));
-                setError(errorData.detail || 'Registration failed.');
-            }
+      const res = await makeApi().post('/api/auth/register', { email, password });
+      if (res && !(res.status && res.status >= 400)) {
+        await handleEmailLogin(e);
+      } else {
+        setError((res && res.detail) ? res.detail : 'Registration failed.');
+      }
         } catch (err) {
             setError('Registration error. Please try again.');
         }
@@ -128,10 +114,9 @@ export default function PodcastPlusLanding() {
   }, []);
 
   useEffect(() => {
-    fetch('/api/public/episodes')
-      .then(r=> r.ok ? r.json(): Promise.reject(r.status))
-      .then(data => setPublicEpisodes(Array.isArray(data.items)? data.items: []))
-      .catch(()=>{});
+    (async ()=>{
+      try { const data = await makeApi().get('/api/public/episodes'); setPublicEpisodes(Array.isArray(data.items)? data.items: []); } catch {}
+    })();
   }, []);
 
   const handlePlayDemo = () => {

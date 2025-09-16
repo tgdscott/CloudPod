@@ -51,11 +51,17 @@ export default function CreatorUpload({ token, shows, uploads, setUploads, draft
     (async () => {
       try {
         if (!token || !selectedShowId) { setAiEligible(false); return; }
-        const res = await fetch('/api/episodes', { headers: { Authorization: `Bearer ${token}` } });
-        if (!res.ok) { setAiEligible(false); return; }
-        const eps = await res.json();
-        const count = (Array.isArray(eps) ? eps : []).filter(e => String(e?.podcast_id) === String(selectedShowId) && (e?.status === 'processed' || e?.status === 'published')).length;
-        if (!aborted) setAiEligible(count >= 5);
+        try {
+          const eps = await makeApi(token).get('/api/episodes');
+          const list = Array.isArray(eps) ? eps : [];
+          const count = list.filter(e => String(e?.podcast_id) === String(selectedShowId) && (e?.status === 'processed' || e?.status === 'published')).length;
+          if (!aborted) setAiEligible(count >= 5);
+          return;
+        } catch {
+          if (!aborted) setAiEligible(false);
+          return;
+        }
+        
       } catch {
         if (!aborted) setAiEligible(false);
       }

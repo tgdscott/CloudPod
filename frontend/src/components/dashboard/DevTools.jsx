@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { AlertTriangle, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { makeApi } from '@/lib/apiClient';
 
 export default function DevTools({ token }) {
     const [isLoading, setIsLoading] = useState(false);
@@ -15,16 +16,8 @@ export default function DevTools({ token }) {
 
         setIsLoading(true);
         try {
-            const response = await fetch('/api/dev/reset-database', {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-
-            const result = await response.json();
-
-            if (!response.ok) {
-                throw new Error(result.detail || "Failed to reset database.");
-            }
+            const result = await makeApi(token).post('/api/dev/reset-database');
+            if (result && result.status && result.status >= 400) throw new Error(result.detail || 'Failed to reset database.');
             
             toast({
                 title: "Database Reset!",

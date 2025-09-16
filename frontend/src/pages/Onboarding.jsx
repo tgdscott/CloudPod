@@ -77,11 +77,8 @@ export default function Onboarding() {
         if (!fn) { setNameError('First name is required'); return false; }
         setNameError('');
         try {
-          await fetch('/api/auth/users/me/prefs', {
-            method: 'PATCH',
-            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ first_name: fn, last_name: ln || undefined })
-          });
+            const api = makeApi(token);
+            await api.patch('/api/auth/users/me/prefs', { first_name: fn, last_name: ln || undefined });
           try { refreshUser?.({ force: true }); } catch {}
         } catch (_) { /* non-fatal */ }
         return true;
@@ -184,14 +181,18 @@ export default function Onboarding() {
   useEffect(() => {
     if (stepId === 'music' && musicAssets.length <= 1 && !musicLoading) {
       setMusicLoading(true);
-      fetch('/api/music/assets')
-        .then(r => r.ok ? r.json() : Promise.reject())
-        .then(data => {
+      (async () => {
+        try {
+          const api = makeApi(token);
+          const data = await api.get('/api/music/assets');
           const assets = Array.isArray(data?.assets) ? data.assets : [];
           setMusicAssets([NO_MUSIC_OPTION, ...assets]);
-        })
-        .catch(() => setMusicAssets([NO_MUSIC_OPTION]))
-        .finally(() => setMusicLoading(false));
+        } catch (_) {
+          setMusicAssets([NO_MUSIC_OPTION]);
+        } finally {
+          setMusicLoading(false);
+        }
+      })();
     }
     // cleanup preview when leaving music step
     if (stepId !== 'music' && audioRef.current) {
@@ -241,16 +242,14 @@ export default function Onboarding() {
 
   async function handleConnectSpreaker() {
     try {
-      const response = await fetch('/api/spreaker/auth/login', { headers: { 'Authorization': `Bearer ${token}` } });
-  if (!response.ok) throw new Error('Could not start the Spreaker sign-in.');
-      const { auth_url } = await response.json();
+    const api = makeApi(token);
+    const { auth_url } = await api.get('/api/spreaker/auth/login');
+    if (!auth_url) throw new Error('Could not start the Spreaker sign-in.');
       const popup = window.open(auth_url, 'spreakerAuth', 'width=600,height=700');
       const timer = setInterval(() => {
         if (!popup || popup.closed) {
           clearInterval(timer);
-          fetch('/api/auth/users/me', { headers: { 'Authorization': `Bearer ${token}` } })
-            .then(res => res.json())
-            .then(user => { if (user.spreaker_access_token) setIsSpreakerConnected(true); });
+          makeApi(token).get('/api/auth/users/me').then(user => { if (user?.spreaker_access_token) setIsSpreakerConnected(true); }).catch(()=>{});
         }
       }, 1000);
     } catch (error) {
@@ -263,11 +262,7 @@ export default function Onboarding() {
       setSaving(true);
       if (formData.elevenlabsApiKey) {
         try {
-          await fetch('/api/users/me/elevenlabs-key', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ api_key: formData.elevenlabsApiKey })
-          });
+          await makeApi(token).put('/api/users/me/elevenlabs-key', { api_key: formData.elevenlabsApiKey });
         } catch {}
       }
       if (path === 'new') {
@@ -277,10 +272,10 @@ export default function Onboarding() {
         if (formData.coverArt) podcastPayload.append('cover_image', formData.coverArt);
         // Optionally include selected format/music/publishDay metadata in a future API
 
-        const podcastRes = await fetch('/api/podcasts/', { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: podcastPayload });
-        if (!podcastRes.ok) {
+        const res = await makeApi(token).raw('/api/podcasts/', { method: 'POST', body: podcastPayload });
+        if (!res || (res && res.status && res.status >= 400)) {
           let detail = '';
-          try { const j = await podcastRes.json(); detail = j.detail || JSON.stringify(j); } catch {}
+          try { detail = (res && res.detail) ? res.detail : JSON.stringify(res); } catch {}
           throw new Error(detail || 'Failed to create the podcast show.');
         }
         try { toast({ title: 'Success!', description: 'Your new podcast show has been created.' }); } catch {}
@@ -582,13 +577,7 @@ export default function Onboarding() {
       // Start import on Continue
       try {
         if (!rssUrl) return true; // lenient: allow moving forward even if blank
-        const r = await fetch('/api/import/rss', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-          body: JSON.stringify({ rss_url: rssUrl.trim() })
-        });
-        // Ignore server errors for now; the flow shows progress regardless
-        void r;
+        try { await makeApi(token).post('/api/import/rss', { rss_url: rssUrl.trim() }); } catch {}
       } catch {}
       return true;
     } : undefined,

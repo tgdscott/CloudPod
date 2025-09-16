@@ -40,14 +40,22 @@ function jsonBody(body) {
 }
 
 export function makeApi(token) {
-  const authHeader = token ? { Authorization: `Bearer ${token}` } : {};
+  // Compute Authorization header at call time so callers that provided a
+  // null/undefined token initially still pick up a token stored later in
+  // localStorage (e.g., after OAuth redirect). This avoids races where
+  // components call makeApi before AuthProvider has set its token state.
+  const authFor = (optsHeaders = {}) => {
+    const provided = token || (() => { try { return localStorage.getItem('authToken'); } catch { return null; } })();
+    return provided ? { Authorization: `Bearer ${provided}`, ...(optsHeaders || {}) } : { ...(optsHeaders || {}) };
+  };
+
   return {
-    get: (p, opts={}) => req(p, { ...opts, method: "GET", headers: { ...authHeader, ...(opts.headers||{}) } }),
-    post: (p, body, opts={}) => req(p, { ...opts, method: "POST", headers: { 'Content-Type': 'application/json', ...authHeader, ...(opts.headers||{}) }, body: jsonBody(body) }),
-    put: (p, body, opts={}) => req(p, { ...opts, method: "PUT", headers: { 'Content-Type': 'application/json', ...authHeader, ...(opts.headers||{}) }, body: jsonBody(body) }),
-    patch: (p, body, opts={}) => req(p, { ...opts, method: "PATCH", headers: { 'Content-Type': 'application/json', ...authHeader, ...(opts.headers||{}) }, body: jsonBody(body) }),
-    del: (p, opts={}) => req(p, { ...opts, method: "DELETE", headers: { ...authHeader, ...(opts.headers||{}) } }),
-    raw: (p, opts={}) => req(p, { ...opts, headers: { ...authHeader, ...(opts.headers||{}) } }),
+    get: (p, opts={}) => req(p, { ...opts, method: "GET", headers: authFor(opts.headers) }),
+    post: (p, body, opts={}) => req(p, { ...opts, method: "POST", headers: authFor({ 'Content-Type': 'application/json', ...(opts.headers||{}) }), body: jsonBody(body) }),
+    put: (p, body, opts={}) => req(p, { ...opts, method: "PUT", headers: authFor({ 'Content-Type': 'application/json', ...(opts.headers||{}) }), body: jsonBody(body) }),
+    patch: (p, body, opts={}) => req(p, { ...opts, method: "PATCH", headers: authFor({ 'Content-Type': 'application/json', ...(opts.headers||{}) }), body: jsonBody(body) }),
+    del: (p, opts={}) => req(p, { ...opts, method: "DELETE", headers: authFor(opts.headers) }),
+    raw: (p, opts={}) => req(p, { ...opts, headers: authFor(opts.headers) }),
   };
 }
 

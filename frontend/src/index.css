@@ -98,8 +98,8 @@
       radial-gradient(80rem 40rem at 120% -10%, hsl(185 84% 93%) 0%, transparent 60%),
       radial-gradient(60rem 30rem at -20% 0%, hsl(168 69% 92%) 0%, transparent 60%);
     background-repeat: no-repeat;
-    /* NSC font (more legible): Atkinson Hyperlegible */
-    font-family: "Atkinson Hyperlegible", Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  /* NSC font (more legible): Inter (replaced Atkinson Hyperlegible) */
+  font-family: "Inter", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
     font-size: 18px;
     line-height: 1.7;
   }

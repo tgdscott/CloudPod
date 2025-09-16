@@ -3,12 +3,15 @@ options:
   logging: CLOUD_LOGGING_ONLY
 
 substitutions:
-  _REGION: us-central1
-  _SERVICE: your-cloud-run-service-name
+  _REGION: us-west1
+  _SERVICE: podcast-web-524304361363
   _AR_REPO: cloud-run
+  _DATABASE_URL: database_url:latest
+  _MEDIA_ROOT: /tmp
+  _SHORT_SHA: 'local'
 
 images:
-  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE}:$SHORT_SHA'
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE}:$_SHORT_SHA'
   - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE}:latest'
 
 steps:
@@ -17,14 +20,32 @@ steps:
     args:
       - build
       - -t
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE}:$SHORT_SHA'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE}:$_SHORT_SHA'
+      - -t
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE}:latest'
       - .
 
-  # Push image
+  # Push image with SHA tag
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - push
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE}:$SHORT_SHA'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE}:$_SHORT_SHA'
+
+  # Push image with latest tag
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - push
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE}:latest'
+
+  # Seed the database
+  - name: 'python:3.12-slim'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        pip install -r podcast-pro-plus/requirements.txt
+        python seed_db.py
+    secretEnv: ['DATABASE_URL']
 
   # Deploy to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
@@ -33,7 +54,13 @@ steps:
       - run
       - deploy
       - '${_SERVICE}'
-      - '--image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE}:$SHORT_SHA'
+      - '--image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE}:$_SHORT_SHA'
       - '--region=${_REGION}'
       - '--platform=managed'
-      - '--quiet'
+      - '--set-env-vars=ADMIN_EMAIL=scott@scottgerhardt.com,MEDIA_ROOT=${_MEDIA_ROOT}'
+      - '--set-secrets=DATABASE_URL=${_DATABASE_URL}'
+
+availableSecrets:
+  secretManager:
+  - versionName: projects/podcast612/secrets/database_url/versions/latest
+    env: 'DATABASE_URL'
