@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
-from sqlalchemy import text
-from sqlmodel import Session
+from sqlalchemy import text, func
+from sqlmodel import Session, select
 from datetime import datetime
 import os, importlib, inspect
 
@@ -31,7 +31,7 @@ def debug_info(session: Session = Depends(get_session)):
                 cols[tbl] = [f"<err {e}>"]
         for model, name in ((Podcast, "podcast"), (Episode, "episode")):
             try:
-                counts[name] = session.query(model).count()
+                counts[name] = session.exec(select(func.count()).select_from(model)).one()
             except Exception:
                 counts[name] = None
     except Exception as db_exc:
@@ -61,7 +61,7 @@ def debug_info(session: Session = Depends(get_session)):
 
 @router.get("/podcast-fields")
 def podcast_fields(session: Session = Depends(get_session)):
-    p = session.query(Podcast).first()
+    p = session.exec(select(Podcast)).first()
     if not p:
         return {"podcast": None}
     data = p.model_dump()

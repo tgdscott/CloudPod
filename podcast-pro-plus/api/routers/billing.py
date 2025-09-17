@@ -14,7 +14,7 @@ from sqlmodel import select
 from ..services.billing import usage as usage_svc
 from ..core.config import settings
 
-stripe.api_key = os.getenv("STRIPE_SECRET_KEY", "")
+stripe.api_key = settings.STRIPE_SECRET_KEY
 
 router = APIRouter(prefix="/billing", tags=["Billing"])
 
@@ -249,9 +249,16 @@ def _episodes_created_this_month(session: Session, user_id) -> int:
     start = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
     # created_at may not exist on very old rows; filter defensively
     try:
-        return session.query(Episode).filter(Episode.user_id == user_id).filter(Episode.created_at >= start).count()  # type: ignore[arg-type]
+        return session.exec(
+            select(func.count(Episode.id))
+            .where(Episode.user_id == user_id)
+            .where(Episode.created_at >= start)
+        ).one()
     except Exception:
-        return session.query(Episode).filter(Episode.user_id == user_id).count()
+        return session.exec(
+            select(func.count(Episode.id))
+            .where(Episode.user_id == user_id)
+        ).one()
 
 
 @router.get("/subscription", response_model=SubscriptionStatus)

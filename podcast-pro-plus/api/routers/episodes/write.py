@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Body, status
 from sqlalchemy.orm import Session
+from sqlmodel import select
 
 from api.core.database import get_session
 from api.core.auth import get_current_user
@@ -119,12 +120,11 @@ def update_episode_metadata(
 	if changed and ("season_number" in payload or "episode_number" in payload):
 		try:
 			if ep.podcast_id and ep.season_number is not None and ep.episode_number is not None:
-				dup = (
-					session.query(Episode)
-					.filter_by(podcast_id=ep.podcast_id, season_number=ep.season_number, episode_number=ep.episode_number)
-					.filter(Episode.id != ep.id)  # type: ignore[arg-type]
-					.first()
-				)
+				dup = session.exec(
+					select(Episode)
+					.where(Episode.podcast_id == ep.podcast_id, Episode.season_number == ep.season_number, Episode.episode_number == ep.episode_number)
+					.where(Episode.id != ep.id)
+				).first()
 				if dup:
 					raise HTTPException(status_code=409, detail="Episode numbering already in use for this podcast")
 		except HTTPException:
@@ -346,7 +346,7 @@ def delete_episode(
 	uid = getattr(current_user, 'id', None)
 	if uid is None and isinstance(current_user, dict):  # type: ignore[arg-type]
 		uid = current_user.get('id')  # type: ignore[assignment]
-	ep = session.query(Episode).filter_by(id=eid, user_id=uid).first()
+	ep = session.exec(select(Episode).where(Episode.id == eid, Episode.user_id == uid)).first()
 	if not ep:
 		# Idempotent delete: if already deleted or not found for user, return 204
 		return

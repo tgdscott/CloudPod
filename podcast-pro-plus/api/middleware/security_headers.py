@@ -7,6 +7,8 @@ from typing import List
 import re
 import logging
 
+from ..core.config import settings
+
 logger = logging.getLogger("security_headers")
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -28,7 +30,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             safe: List[str] = []
             for p in parts:
                 # Reject hosts containing characters that would break CSP
-                if any(c in p for c in [';', '\\n', '\\r', '"']):
+                if any(c in p for c in [';', '\n', '\r', '"']):
                     continue
                 # Only allow common URL characters (scheme, host, port, path)
                 if not re.match(r"^[A-Za-z0-9:/.#%?&=\-@_~]+$", p):
@@ -104,7 +106,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
         # Ensure CORS responses have explicit origin when credentials are required.
-        allowed_origins = [o.strip() for o in (os.getenv('CORS_ALLOWED_ORIGINS', 'https://app.getpodcastplus.com').split(',')) if o.strip()]
+        allowed_origins = [o.strip() for o in (settings.CORS_ALLOWED_ORIGINS.split(',')) if o.strip()]
         origin = request.headers.get('origin')
         if origin and origin in allowed_origins:
             response.headers['Access-Control-Allow-Origin'] = origin

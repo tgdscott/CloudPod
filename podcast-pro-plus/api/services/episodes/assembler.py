@@ -20,13 +20,16 @@ import time
 def _episodes_created_this_month(session: Session, user_id) -> int:
     from calendar import monthrange
     from datetime import datetime, timezone
+    from sqlmodel import select
+    from sqlalchemy import func
+
     now = datetime.now(timezone.utc)
     start = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
     try:
-        q = session.query(Episode).filter_by(user_id=user_id)
+        q = select(func.count(Episode.id)).where(Episode.user_id == user_id)
         if hasattr(Episode, 'created_at'):
-            q = q.filter(Episode.created_at >= start)  # type: ignore[arg-type]
-        return int(q.count())
+            q = q.where(Episode.created_at >= start)
+        return session.exec(q).one()
     except Exception:
         return 0
 

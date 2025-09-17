@@ -3,6 +3,7 @@ import shutil
 import logging
 from pathlib import Path
 from typing import Optional
+from sqlmodel import select
 
 from worker.tasks import celery_app
 from api.core.paths import WS_ROOT as PROJECT_ROOT
@@ -339,7 +340,8 @@ def create_podcast_episode(
 		# Build SFX trigger map
 		sfx_map = {}
 		try:
-			items = session.query(MediaItem).filter_by(user_id=episode.user_id).all()
+			q = select(MediaItem).where(MediaItem.user_id == episode.user_id)
+			items = session.exec(q).all()
 			for it in items:
 				key = (it.trigger_keyword or '').strip().lower()
 				if key:
@@ -658,11 +660,8 @@ def create_podcast_episode(
 
 		try:
 			main_fn = os.path.basename(str(main_content_filename))
-			media_item = (
-				session.query(MediaItem)
-				.filter_by(filename=main_fn, user_id=episode.user_id)
-				.first()
-			)
+			q = select(MediaItem).where(MediaItem.filename == main_fn, MediaItem.user_id == episode.user_id)
+			media_item = session.exec(q).first()
 			if media_item and media_item.category == MediaCategory.main_content:
 				media_path = Path('media_uploads') / media_item.filename
 				if media_path.is_file():

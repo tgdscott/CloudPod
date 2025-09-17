@@ -4,6 +4,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlmodel import select
 
 from api.core.database import get_session
 from api.core.auth import get_current_user
@@ -57,11 +58,11 @@ def publish_episode_endpoint(
         podcast_obj = None
         try:
             if getattr(ep, 'podcast_id', None):
-                podcast_obj = session.query(Podcast).filter_by(id=ep.podcast_id).first()
+                podcast_obj = session.exec(select(Podcast).where(Podcast.id == ep.podcast_id)).first()
         except Exception:
             podcast_obj = None
         if not podcast_obj and candidate_uuid:
-            podcast_obj = session.query(Podcast).filter_by(id=candidate_uuid).first()
+            podcast_obj = session.exec(select(Podcast).where(Podcast.id == candidate_uuid)).first()
         if podcast_obj and getattr(podcast_obj, 'spreaker_show_id', None):
             derived_show_id = str(podcast_obj.spreaker_show_id)
 

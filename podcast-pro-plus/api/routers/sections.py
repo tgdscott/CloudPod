@@ -24,12 +24,13 @@ router = APIRouter(prefix="/sections", tags=["sections"])
 def _count_podcast_episodes(session: Session, podcast_id: UUID, user_id: UUID) -> int:
     """Count processed (built) episodes for this podcast & user."""
     try:
-        q = session.query(Episode).filter_by(user_id=user_id, podcast_id=podcast_id)
+        from sqlalchemy import func
+        q = select(func.count(Episode.id)).where(Episode.user_id == user_id, Episode.podcast_id == podcast_id)
         try:
-            q = q.filter(Episode.status == EpisodeStatus.processed)  # type: ignore[attr-defined]
+            q = q.where(Episode.status == EpisodeStatus.processed)
         except Exception:
-            q = q.filter(Episode.status == "processed")  # type: ignore[attr-defined]
-        return int(q.count())
+            q = q.where(Episode.status == "processed")
+        return session.exec(q).one()
     except Exception:
         return 0
 

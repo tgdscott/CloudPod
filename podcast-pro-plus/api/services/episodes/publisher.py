@@ -143,7 +143,8 @@ def republish(session: Session, current_user, episode_id: UUID) -> Dict[str, Any
     show_id = None
     try:
         from api.models.podcast import Podcast
-        pod = session.query(Podcast).filter_by(id=ep.podcast_id).first()
+        from sqlmodel import select
+        pod = session.exec(select(Podcast).where(Podcast.id == ep.podcast_id)).first()
         if pod and getattr(pod, 'spreaker_show_id', None):
             show_id = str(pod.spreaker_show_id)
     except Exception:

@@ -4,6 +4,7 @@ from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlmodel import select
 
 from api.core.database import get_session
 from api.services.episodes import jobs as _svc_jobs
@@ -45,7 +46,7 @@ def get_job_status(job_id: str, session: Session = Depends(get_session)):
             _uuid_obj = _UUID(str(ep_id))
         except Exception:
             _uuid_obj = None
-        ep = session.query(Episode).filter_by(id=_uuid_obj).first() if _uuid_obj else None
+        ep = session.exec(select(Episode).where(Episode.id == _uuid_obj)).first() if _uuid_obj else None
         if not ep:
             return {"job_id": job_id, "status": "processed"}
 
@@ -108,13 +109,12 @@ def get_job_status(job_id: str, session: Session = Depends(get_session)):
         try:
             cutoff = datetime.now(timezone.utc) - timedelta(hours=2)
             from sqlalchemy import text as _sa_text
-            recent = (
-                session.query(Episode)
-                .filter(Episode.processed_at >= cutoff)  # type: ignore[arg-type]
+            recent = session.exec(
+                select(Episode)
+                .where(Episode.processed_at >= cutoff)  # type: ignore[arg-type]
                 .order_by(_sa_text("processed_at DESC"))
                 .limit(10)
-                .all()
-            )
+            ).all()
             for ep in recent:
                 if getattr(ep, 'final_audio_path', None) and getattr(ep, 'status', None) in ("processed", "published"):
                     return {"job_id": job_id, "status": "processed", "episode": {

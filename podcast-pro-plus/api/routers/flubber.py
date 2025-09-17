@@ -6,6 +6,7 @@ from uuid import UUID
 
 from api.core.database import get_session
 from api.models.podcast import Episode
+from sqlmodel import select
 from api.core.auth import get_current_user
 from api.models.user import User
 from pydub import AudioSegment
@@ -55,7 +56,7 @@ def _save_ep_meta_json_field(session, ep: Episode, meta: Dict[str, Any]):
 @router.get("/contexts/{episode_id}", summary="List flubber context snippets for an episode")
 def list_flubber_contexts(episode_id: str, session=Depends(get_session), current_user: User = Depends(get_current_user)):
     try:
-        ep = session.query(Episode).filter(Episode.id == UUID(str(episode_id))).first()
+        ep = session.exec(select(Episode).where(Episode.id == UUID(str(episode_id)))).first()
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid episode id")
     if not ep or ep.user_id != current_user.id:
@@ -81,7 +82,7 @@ def prepare_flubber_contexts(
     current_user: User = Depends(get_current_user)
 ):
     try:
-        ep = session.query(Episode).filter(Episode.id == UUID(str(episode_id))).first()
+        ep = session.exec(select(Episode).where(Episode.id == UUID(str(episode_id)))).first()
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid episode id")
     if not ep or ep.user_id != current_user.id:
@@ -142,7 +143,7 @@ def apply_flubber_cuts(
     current_user: User = Depends(get_current_user)
 ):
     try:
-        ep = session.query(Episode).filter(Episode.id == UUID(str(episode_id))).first()
+        ep = session.exec(select(Episode).where(Episode.id == UUID(str(episode_id)))).first()
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid episode id")
     if not ep or ep.user_id != current_user.id:

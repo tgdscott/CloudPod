@@ -5,6 +5,7 @@ from worker.tasks import celery_app
 from api.core.database import get_session
 from api.core.paths import MEDIA_DIR
 from api.models.podcast import MediaItem, MediaCategory, Episode
+from sqlmodel import select
 
 try:
 	from zoneinfo import ZoneInfo  # Python 3.9+
@@ -30,15 +31,16 @@ def purge_expired_uploads() -> dict:
 	try:
 		# Fetch candidates: expired main_content
 		q = (
-			session.query(MediaItem)
-			.filter(MediaItem.category == MediaCategory.main_content)  # type: ignore
-			.filter(MediaItem.expires_at != None)  # type: ignore
-			.filter(MediaItem.expires_at <= now)  # type: ignore
+			select(MediaItem)
+			.where(MediaItem.category == MediaCategory.main_content)  # type: ignore
+			.where(MediaItem.expires_at != None)  # type: ignore
+			.where(MediaItem.expires_at <= now)  # type: ignore
 			.limit(10000)
 		)
-		items = q.all()
+		items = session.exec(q).all()
 		# Build a set of in-use basenames from episodes to avoid deleting source files that are still referenced
-		eps = session.query(Episode).all()
+		q_eps = select(Episode)
+		eps = session.exec(q_eps).all()
 		in_use = set()
 		for e in eps:
 			for name in (getattr(e, 'working_audio_name', None), getattr(e, 'final_audio_path', None)):

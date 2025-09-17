@@ -6,9 +6,10 @@ from ..core.constants import ALLOWED_PLANS
 from sqlmodel import Session
 from ..models.user import User
 from ..models.notification import Notification
+from ..core.config import settings
 
-stripe.api_key = os.getenv("STRIPE_SECRET_KEY", "")
-WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+stripe.api_key = settings.STRIPE_SECRET_KEY
+WEBHOOK_SECRET = settings.STRIPE_WEBHOOK_SECRET
 
 logger = logging.getLogger(__name__)
 if not logger.handlers:

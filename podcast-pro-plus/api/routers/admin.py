@@ -84,7 +84,7 @@ def seed_demo_data(
         podcast = existing_podcast[0]
 
     # Template
-    tmpl = session.query(PodcastTemplate).filter(PodcastTemplate.user_id==admin_user.id).first()
+    tmpl = session.exec(select(PodcastTemplate).where(PodcastTemplate.user_id==admin_user.id)).first()
     if not tmpl:
         seg_intro = TemplateSegment(segment_type="intro", source=StaticSegmentSource(filename="demo_intro.mp3"))
         seg_content = TemplateSegment(segment_type="content", source=StaticSegmentSource(filename="demo_content.mp3"))
@@ -106,11 +106,11 @@ def admin_summary(
     admin_user: User = Depends(get_current_admin_user)
 ):
     """Simple platform summary for admin dashboard MVP."""
-    user_count = session.query(User).count()
-    podcast_count = session.query(Podcast).count()
-    template_count = session.query(PodcastTemplate).count()
-    episode_count = session.query(Episode).count()
-    published_count = session.query(Episode).filter(Episode.status=="published").count()
+    user_count = session.exec(select(func.count(User.id))).one()
+    podcast_count = session.exec(select(func.count(Podcast.id))).one()
+    template_count = session.exec(select(func.count(PodcastTemplate.id))).one()
+    episode_count = session.exec(select(func.count(Episode.id))).one()
+    published_count = session.exec(select(func.count(Episode.id)).where(Episode.status == "published")).one()
     return {
         "users": user_count,
         "podcasts": podcast_count,
@@ -686,11 +686,11 @@ def admin_users_full(
 ):
     # Preload episode counts grouped by user
     counts = dict(
-        session.query(Episode.user_id, func.count(Episode.id)).group_by(Episode.user_id).all()
+        session.exec(select(Episode.user_id, func.count(Episode.id)).group_by(Episode.user_id)).all()
     )
     # Latest activity per user (max processed_at)
     latest = dict(
-        session.query(Episode.user_id, func.max(Episode.processed_at)).group_by(Episode.user_id).all()
+        session.exec(select(Episode.user_id, func.max(Episode.processed_at)).group_by(Episode.user_id)).all()
     )
     users = crud.get_all_users(session)
     out: List[UserAdminOut] = []
@@ -760,8 +760,8 @@ def admin_update_user(
         session.commit()
         session.refresh(user)
     # compute counts/activity
-    episode_count = session.query(func.count(Episode.id)).filter(Episode.user_id==user.id).scalar() or 0
-    last_activity = session.query(func.max(Episode.processed_at)).filter(Episode.user_id==user.id).scalar() or user.created_at
+    episode_count = session.exec(select(func.count(Episode.id)).where(Episode.user_id==user.id)).scalar_one_or_none() or 0
+    last_activity = session.exec(select(func.max(Episode.processed_at)).where(Episode.user_id==user.id)).scalar_one_or_none() or user.created_at
     return UserAdminOut(
         id=str(user.id),
         email=user.email,

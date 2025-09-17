@@ -4,7 +4,8 @@ import os
 import logging
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy.orm import Session as _Session
+from sqlmodel import select, Session as _Session
+from sqlmodel import select
 
 from api.core.database import get_session, engine, create_db_and_tables
 from api.models.podcast import Episode, Podcast
@@ -22,7 +23,8 @@ def _normalize_episode_paths() -> None:
     """Ensure Episode paths store only basenames for local files."""
     session: _Session = next(get_session())
     try:
-        eps = session.query(Episode).limit(5000).all()
+                q = select(Episode).limit(5000)
+        eps = session.exec(q).all()
         changed = 0
         for e in eps:
             c = False
@@ -52,7 +54,8 @@ def _normalize_podcast_covers() -> None:
     """Ensure Podcast.cover_path stores only a basename if it's a local path."""
     session: _Session = next(get_session())
     try:
-        pods = session.query(Podcast).limit(5000).all()
+                q = select(Podcast).limit(5000)
+        pods = session.exec(q).all()
         changed = 0
         for p in pods:
             try:
@@ -272,7 +275,8 @@ def _backfill_mediaitem_expires_at() -> None:
     try:
         from api.models.podcast import MediaItem, MediaCategory
 
-        items = session.query(MediaItem).filter((MediaItem.expires_at == None)).limit(5000).all()  # type: ignore
+                q = select(MediaItem).filter((MediaItem.expires_at == None)).limit(5000)  # type: ignore
+        items = session.exec(q).all()
         changed = 0
         for m in items:
             try:

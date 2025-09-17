@@ -11,12 +11,13 @@ from ..models import user, podcast, settings as _app_settings  # noqa: F401
 from ..models import usage as _usage_models  # noqa: F401
 from .paths import WS_ROOT
 from pathlib import Path
+from .config import settings
 
 _DB_PATH: Path = Path(os.getenv("SQLITE_PATH", "/tmp/ppp.db")).resolve()
 _DEFAULT_SQLITE_URL = f"sqlite:///{_DB_PATH.as_posix()}"
 
-# Pick DATABASE_URL from env when provided; else fallback to SQLite
-DATABASE_URL = os.getenv("DATABASE_URL") or _DEFAULT_SQLITE_URL
+# Pick DATABASE_URL from settings when provided; else fallback to SQLite
+DATABASE_URL = settings.DATABASE_URL or _DEFAULT_SQLITE_URL
 
 def _is_sqlite(url: str) -> bool:
     try:
