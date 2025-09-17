@@ -21,7 +21,7 @@ passlib[bcrypt]
 feedparser
 stripe
 pg8000
-google-cloud-sql-connector
+cloud-sql-python-connector[psycopg]
 celery
 google-cloud-storage
 authlib
