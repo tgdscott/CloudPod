@@ -3,7 +3,10 @@ from typing import Optional
 
 class Settings(BaseSettings):
     # --- Core Infrastructure ---
-    DATABASE_URL: str
+    DB_USER: str
+    DB_PASS: str
+    DB_NAME: str
+    INSTANCE_CONNECTION_NAME: str
     SECRET_KEY: str # Used for signing JWTs
     SESSION_SECRET_KEY: str # Used for signing session cookies
 

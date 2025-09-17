@@ -13,29 +13,31 @@ from .paths import WS_ROOT
 from pathlib import Path
 from .config import settings
 
-_DB_PATH: Path = Path(os.getenv("SQLITE_PATH", "/tmp/ppp.db")).resolve()
-_DEFAULT_SQLITE_URL = f"sqlite:///{_DB_PATH.as_posix()}"
+log = logging.getLogger(__name__)
 
-# Pick DATABASE_URL from settings when provided; else fallback to SQLite
-DATABASE_URL = settings.DATABASE_URL or _DEFAULT_SQLITE_URL
+# --- Cloud SQL Connector ---
+IS_CLOUD_SQL = bool(settings.INSTANCE_CONNECTION_NAME)
 
-def _is_sqlite(url: str) -> bool:
-    try:
-        return url.lower().startswith("sqlite:")
-    except Exception:
-        return False
+if IS_CLOUD_SQL:
+    from google.cloud.sql.connector import Connector, IPTypes
+    import pg8000
 
-if _is_sqlite(DATABASE_URL):
-    # SQLite: keep single-file DB with thread check disabled
+    connector = Connector()
+
+    def getconn() -> pg8000.dbapi.Connection:
+        conn: pg8000.dbapi.Connection = connector.connect(
+            settings.INSTANCE_CONNECTION_NAME,
+            "pg8000",
+            user=settings.DB_USER,
+            password=settings.DB_PASS,
+            db=settings.DB_NAME,
+            ip_type=IPTypes.PRIVATE,
+        )
+        return conn
+
     engine = create_engine(
-        DATABASE_URL,
-        echo=False,
-        connect_args={"check_same_thread": False},
-    )
-else:
-    # External DB (e.g., Postgres/MySQL): enable pooling and pre-ping
-    engine = create_engine(
-        DATABASE_URL,
+        "postgresql+pg8000://",
+        creator=getconn,
         pool_pre_ping=True,
         pool_size=int(os.getenv("DB_POOL_SIZE", 5)),
         max_overflow=int(os.getenv("DB_MAX_OVERFLOW", 0)),
@@ -43,30 +45,26 @@ else:
         future=True,
     )
 
-log = logging.getLogger(__name__)
+else:
+    # --- SQLite Fallback ---
+    _DB_PATH: Path = Path(os.getenv("SQLITE_PATH", "/tmp/ppp.db")).resolve()
+    _DEFAULT_SQLITE_URL = f"sqlite:///{_DB_PATH.as_posix()}"
+    engine = create_engine(
+        _DEFAULT_SQLITE_URL,
+        echo=False,
+        connect_args={"check_same_thread": False},
+    )
 
+    def _enable_foreign_keys(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
 
-def _enable_foreign_keys(dbapi_connection, connection_record):
-    """
-    Runs for every new connection to the SQLite database and turns on foreign
-    key support, which is required for cascading deletes.
-    """
-    cursor = dbapi_connection.cursor()
-    cursor.execute("PRAGMA foreign_keys=ON")
-    cursor.close()
-
-
-# Attach the event listener only for SQLite engines
-if _is_sqlite(DATABASE_URL):
     listen(engine, "connect", _enable_foreign_keys)
 
-def _is_sqlite_engine() -> bool:
-    try:
-        u = getattr(engine, "url", None)
-        return bool(u) and engine.url.get_backend_name() == "sqlite"
-    except Exception:
-        return False
 
+def _is_sqlite_engine() -> bool:
+    return not IS_CLOUD_SQL
 
 
 def _ensure_episode_new_columns():
@@ -166,7 +164,7 @@ def create_db_and_tables():
     # Then perform lightweight additive migrations.
     _ensure_episode_new_columns()
     _ensure_podcast_new_columns()
-    _ensure_template_new_columns()
+    _ensure_template__new_columns()
     # Opportunistically create AppSetting table if missing (older deployments)
     if _is_sqlite_engine():
         try:

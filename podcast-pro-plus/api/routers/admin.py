@@ -66,38 +66,7 @@ async def get_all_users(
     return crud.get_all_users(session=session)
 
 
-@router.post("/seed", status_code=200)
-def seed_demo_data(
-    session: Session = Depends(get_session),
-    admin_user: User = Depends(get_current_admin_user)
-):
-    """Seed minimal demo data (podcast + simple template) if none exist for admin.
-    Safe to call multiple times (idempotent-ish)."""
-    # Podcast
-    existing_podcast = crud.get_podcasts_by_user(session, admin_user.id)
-    if not existing_podcast:
-        podcast = Podcast(name="Demo Podcast", description="Demo show", user_id=admin_user.id)
-        session.add(podcast)
-        session.commit()
-        session.refresh(podcast)
-    else:
-        podcast = existing_podcast[0]
 
-    # Template
-    tmpl = session.exec(select(PodcastTemplate).where(PodcastTemplate.user_id==admin_user.id)).first()
-    if not tmpl:
-        seg_intro = TemplateSegment(segment_type="intro", source=StaticSegmentSource(filename="demo_intro.mp3"))
-        seg_content = TemplateSegment(segment_type="content", source=StaticSegmentSource(filename="demo_content.mp3"))
-        seg_outro = TemplateSegment(segment_type="outro", source=StaticSegmentSource(filename="demo_outro.mp3"))
-        tpl_create = PodcastTemplateCreate(
-            name="Simple Demo Template",
-            segments=[seg_intro, seg_content, seg_outro],
-            background_music_rules=[],
-            timing=SegmentTiming()
-        )
-        tmpl = crud.create_user_template(session, tpl_create, admin_user.id)
-
-    return {"podcast_id": str(podcast.id), "template_id": str(tmpl.id)}
 
 
 @router.get("/summary", status_code=200)
