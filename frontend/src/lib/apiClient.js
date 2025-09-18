@@ -3,19 +3,30 @@ export function isApiError(e) {
 }
 
 // Base URL for API requests. In dev, you can leave this blank and rely on Vite's /api proxy.
-const BASE = (import.meta && import.meta.env && (import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_BASE_URL)
-  ? String(import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_BASE_URL).replace(/\/+$/, "")
-  : "");
+const runtimeBase = (() => {
+  const envBase = (import.meta && import.meta.env && (import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_BASE_URL))
+    ? String(import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_BASE_URL).replace(/\/+$/, '')
+    : '';
+  if (envBase) return envBase;
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    let origin = window.location.origin;
+    if (origin.includes('app.')) {
+      origin = origin.replace('app.', 'api.');
+    }
+    return origin.replace(/\/+$/, '');
+  }
+  return '';
+})();
 
-function buildUrl(path) {
-  if (!path) return BASE || "";
+export function buildApiUrl(path) {
+  const base = runtimeBase;
+  if (!path) return base || '';
   if (/^https?:\/\//i.test(path)) return path; // already absolute
-  // If BASE provided, prefix it; otherwise return path as-is (works with /api proxy or same-origin)
-  return `${BASE}${path}`;
+  return base ? `${base}${path}` : path;
 }
 
 async function req(path, opts = {}) {
-  const url = buildUrl(path);
+  const url = buildApiUrl(path);
   const res = await fetch(url, {
     credentials: "include",
     headers: { ...(opts.headers || {}) },
@@ -61,7 +72,7 @@ export function makeApi(token) {
 
 export function assetUrl(path) {
   // Build a full URL for static assets that come from the API origin (e.g., /static or cover paths)
-  return buildUrl(path);
+  return buildApiUrl(path);
 }
 
 // Backward-compatible simple API without auth

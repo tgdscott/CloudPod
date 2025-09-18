@@ -93,6 +93,12 @@ async def register_user(user_in: UserCreate, session: Session = Depends(get_sess
     except Exception:
         user_in.is_active = True
     user = crud.create_user(session=session, user_create=user_in)
+    admin_email = getattr(settings, 'ADMIN_EMAIL', '')
+    if admin_email and user.email and user.email.lower() == admin_email.lower():
+        user.is_admin = True
+        session.add(user)
+        session.commit()
+        session.refresh(user)
     return user
 
 @router.post("/token")
@@ -108,7 +114,8 @@ async def login_for_access_token(
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    if user.email and user.email.lower() == settings.ADMIN_EMAIL.lower():
+    admin_email = getattr(settings, 'ADMIN_EMAIL', '')
+    if admin_email and user.email and user.email.lower() == admin_email.lower():
         user.is_admin = True
     user.last_login = datetime.utcnow()
     session.add(user)
@@ -139,7 +146,8 @@ async def login_for_access_token_json(
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    if user.email and user.email.lower() == settings.ADMIN_EMAIL.lower():
+    admin_email = getattr(settings, 'ADMIN_EMAIL', '')
+    if admin_email and user.email and user.email.lower() == admin_email.lower():
         user.is_admin = True
     user.last_login = datetime.utcnow()
     session.add(user)
@@ -221,7 +229,8 @@ async def auth_google_callback(request: Request, session: Session = Depends(get_
             user_create.is_active = True
         user = crud.create_user(session=session, user_create=user_create)
 
-    if user.email and user.email.lower() == settings.ADMIN_EMAIL.lower():
+    admin_email = getattr(settings, 'ADMIN_EMAIL', '')
+    if admin_email and user.email and user.email.lower() == admin_email.lower():
         user.is_admin = True
 
     if not user.google_id:
@@ -245,7 +254,8 @@ async def auth_google_callback(request: Request, session: Session = Depends(get_
 async def read_users_me(current_user: User = Depends(get_current_user)):
     """Gets the details of the currently logged-in user."""
     data = current_user.model_dump()
-    is_admin = bool(current_user.email and current_user.email.lower() == settings.ADMIN_EMAIL.lower())
+    admin_email = getattr(settings, 'ADMIN_EMAIL', '')
+    is_admin = bool(admin_email and current_user.email and current_user.email.lower() == admin_email.lower())
     data.update({"is_admin": is_admin})
     return UserPublic(**data)
 

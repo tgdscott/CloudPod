@@ -9,6 +9,7 @@ from sqlmodel import select
 from sqlalchemy import inspect, text
 
 from api.core.database import get_session, engine, create_db_and_tables
+from api.core.config import settings
 from api.models.podcast import Episode, Podcast
 from api.core.logging import get_logger
 
@@ -272,6 +273,26 @@ def _ensure_user_admin_column() -> None:
         log.warning("[migrate] Could not add user.is_admin column: %s", e)
 
 
+def _ensure_primary_admin() -> None:
+    """Ensure ADMIN_EMAIL user has is_admin flag set."""
+    admin_email = getattr(settings, 'ADMIN_EMAIL', None)
+    if not admin_email:
+        return
+    admin_email = admin_email.lower()
+    try:
+        with engine.begin() as conn:
+            dialect = engine.dialect.name.lower()
+            if 'sqlite' in dialect:
+                stmt = "UPDATE user SET is_admin = 1 WHERE lower(email) = :email"
+            else:
+                stmt = 'UPDATE \"user\" SET is_admin = TRUE WHERE lower(email) = :email'
+            result = conn.execute(text(stmt), {'email': admin_email})
+            if result.rowcount:
+                log.info('[startup] Ensured admin account flag for %s', admin_email)
+    except Exception as e:
+        log.warning('[startup] Could not ensure admin flag for %s: %s', admin_email, e)
+
+
 def _compute_pt_expiry(created_at_utc: datetime, days: int = 14) -> datetime:
     """Compute UTC expiry aligned to 2am America/Los_Angeles."""
     try:
@@ -334,6 +355,7 @@ def run_startup_tasks() -> None:
     _normalize_episode_paths()
     _normalize_podcast_covers()
     _ensure_user_admin_column()
+    _ensure_primary_admin()
     _ensure_user_subscription_column()
     _backfill_mediaitem_expires_at()
 

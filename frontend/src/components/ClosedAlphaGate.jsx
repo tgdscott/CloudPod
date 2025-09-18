@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/AuthContext.jsx";
+import { buildApiUrl } from "@/lib/apiClient.js";
 
 export default function ClosedAlphaGate() {
   const { user, token, logout } = useAuth();
@@ -18,7 +19,7 @@ export default function ClosedAlphaGate() {
     if (!email) return;
     setSubmitting(true);
     try {
-      const r = await fetch("/api/public/waitlist", {
+      const r = await fetch(buildApiUrl('/api/public/waitlist'), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

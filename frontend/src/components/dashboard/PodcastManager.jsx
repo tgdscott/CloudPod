@@ -8,6 +8,7 @@ import { useState, useEffect } from "react";
 import EditPodcastDialog from "./EditPodcastDialog";
 import NewUserWizard from "./NewUserWizard";
 import { useToast } from "@/hooks/use-toast";
+import { buildApiUrl } from "@/lib/apiClient";
 
 const API_BASE_URL = ""; // Use relative so it works behind any proxy
 
@@ -63,7 +64,7 @@ export default function PodcastManager({ onBack, token, podcasts, setPodcasts })
     if (!showToDelete) return;
     setIsDeleting(true);
     try {
-      const response = await fetch(`/api/podcasts/${showToDelete.id}`, {
+      const response = await fetch(buildApiUrl(`/api/podcasts/${showToDelete.id}`), {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });

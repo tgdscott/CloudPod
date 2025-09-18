@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useAbDrafts } from "../store/useAbDrafts";
 import { abApi } from "../lib/abApi";
-import { makeApi } from "@/lib/apiClient.js";
+import { makeApi, buildApiUrl } from "@/lib/apiClient.js";
 import { fetchVoices as fetchElevenVoices } from "@/api/elevenlabs";
 import VoicePicker from "@/components/VoicePicker";
 
@@ -308,7 +308,7 @@ export default function CreatorFinalize({ token, drafts, uploads, uploadById, go
                   setIoLoading(true);
                   setShowIntroOutro(true);
                   try {
-                    const res = await fetch(`/api/templates/${tplId}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+                    const res = await fetch(buildApiUrl(`/api/templates/${tplId}`), { headers: token ? { Authorization: `Bearer ${token}` } : {} });
                     if (res.ok) {
                       const tpl = await res.json();
                       setIoTemplate(tpl);
@@ -348,7 +348,7 @@ export default function CreatorFinalize({ token, drafts, uploads, uploadById, go
                   if (!tplId) { window.alert('Choose a template first (on Upload page).'); return; }
                   setIoSuggesting(true);
                   try {
-                    const res = await fetch(`/api/templates/${tplId}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+                    const res = await fetch(buildApiUrl(`/api/templates/${tplId}`), { headers: token ? { Authorization: `Bearer ${token}` } : {} });
                     if (!res.ok) throw new Error('Template not found');
                     const tpl = await res.json();
                     const upload = uploadById[fileId];

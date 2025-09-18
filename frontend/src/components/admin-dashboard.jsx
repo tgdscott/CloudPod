@@ -39,7 +39,7 @@ import {
 } from "lucide-react";
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@/AuthContext";
-import { makeApi } from "@/lib/apiClient";
+import { makeApi, buildApiUrl } from "@/lib/apiClient";
 import DbExplorer from '@/components/admin/DbExplorer.jsx';
 import { useToast } from '@/hooks/use-toast';
 import AdminFeatureToggles from '@/components/admin/AdminFeatureToggles.jsx';
@@ -1589,7 +1589,7 @@ function AdminHelpTab() {
     let canceled = false;
     (async () => {
       try {
-        const res = await fetch('/api/health');
+        const res = await fetch(buildApiUrl('/api/health'));
         const ok = res.ok;
         let detail = null;
         try { detail = await res.json(); } catch {}

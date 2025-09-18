@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/AuthContext.jsx';
-import { makeApi } from '@/lib/apiClient';
+import { makeApi, buildApiUrl } from '@/lib/apiClient';
 
 // Restored: podcast format options (removed accidentally in earlier patch)
 export const FORMATS = [
@@ -183,7 +183,7 @@ export default function OnboardingWizard(){
   async function handleSelectMusic(asset){
     setMusicChoice(asset.id);
     if(asset.id !== 'none'){
-      try { await fetch(`/api/music/assets/${asset.id}/select`, { method:'POST', headers:{ Authorization:`Bearer ${token}` }}); } catch {}
+      try { await fetch(buildApiUrl(`/api/music/assets/${asset.id}/select`), { method:'POST', headers:{ Authorization:`Bearer ${token}` }}); } catch {}
     }
   }
 
@@ -273,7 +273,7 @@ export default function OnboardingWizard(){
             category_2_id: selectedCategories[1] || null,
             category_3_id: selectedCategories[2] || null,
           };
-          await fetch(`/api/podcasts/${podcastId}`, { method:'PUT', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token}` }, body: JSON.stringify(body) });
+          await fetch(buildApiUrl(`/api/podcasts/${podcastId}`), { method:'PUT', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token}` }, body: JSON.stringify(body) });
         } catch{}
       }
 
