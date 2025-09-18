@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Body
 from typing import List, Optional, Dict, Any
 from sqlmodel import Session, select
 from sqlalchemy import func
+from sqlalchemy import inspect as sa_inspect
 
 from ..core.config import settings
 from ..models.user import User, UserPublic
@@ -762,6 +763,28 @@ def update_admin_settings(
 ):
     return save_admin_settings(session, payload)
 
+
+
+# --- DB Explorer helpers ---
+
+def _db_get_columns(session: Session, table_name: str) -> list[str]:
+    bind = session.get_bind()
+    dialect = bind.dialect.name.lower() if bind else ''
+    if 'sqlite' in dialect:
+        cols_res = session.exec(_sql_text(f"PRAGMA table_info({table_name})"))
+        return [c[1] for c in cols_res]
+    inspector = sa_inspect(bind)
+    return [col['name'] for col in inspector.get_columns(table_name)]
+
+
+def _db_rows_to_dicts(result) -> list[dict[str, Any]]:
+    try:
+        return [dict(row) for row in result.mappings().all()]
+    except Exception:
+        rows = result.fetchall()
+        keys = result.keys() if hasattr(result, 'keys') else []
+        return [dict(zip(keys, row)) for row in rows]
+
 # ---------------- DB Explorer Endpoints ----------------
 
 @router.get("/db/tables", status_code=200)
@@ -805,8 +828,7 @@ def admin_db_table_rows(
         offset = 0
     try:
         # Columns
-        cols_res = session.exec(_sql_text(f"PRAGMA table_info({table_name})"))
-        columns = [c[1] for c in cols_res]
+        columns = _db_get_columns(session, table_name)
         if not columns:
             return {"table": table_name, "columns": [], "rows": [], "total": 0, "offset": offset, "limit": limit}
         # Ordering: special-case 'episode' to use publish_at DESC per request.
@@ -832,8 +854,7 @@ def admin_db_table_rows(
         total = total_res.first()[0]
         stmt = _sql_text(f"SELECT * FROM {table_name} ORDER BY {order_clause} LIMIT :lim OFFSET :off").bindparams(lim=limit, off=offset)
         res = session.exec(stmt)
-        rows_raw = res.fetchall()
-        rows = [dict(zip(columns, r)) for r in rows_raw]
+        rows = _db_rows_to_dicts(res)
         return {"table": table_name, "columns": columns, "rows": rows, "total": total, "offset": offset, "limit": limit}
     except HTTPException:
         raise
@@ -855,12 +876,10 @@ def admin_db_table_row_detail(
     try:
         stmt = _sql_text(f"SELECT * FROM {table_name} WHERE {pk_col} = :rid").bindparams(rid=row_id)
         res = session.exec(stmt)
-        one = res.first()
-        if not one:
+        row_map = res.mappings().first()
+        if not row_map:
             raise HTTPException(status_code=404, detail="Row not found")
-        cols_res = session.exec(_sql_text(f"PRAGMA table_info({table_name})"))
-        cols = [c[1] for c in cols_res]
-        return {"table": table_name, "row": dict(zip(cols, one))}
+        return {"table": table_name, "row": dict(row_map)}
     except HTTPException:
         raise
     except Exception as e:
@@ -885,13 +904,12 @@ def admin_db_table_row_update(
     if not isinstance(updates, dict) or not updates:
         raise HTTPException(status_code=400, detail="No updates provided")
     # Fetch columns & filter allowed (exclude id & obvious system fields)
-    cols_res = session.exec(_sql_text(f"PRAGMA table_info({table_name})"))
-    cols = [c[1] for c in cols_res]
+    column_names = _db_get_columns(session, table_name)
     protected = {"id", "created_at", "processed_at", "publish_at", "published_at", "spreaker_episode_id"}
     set_parts = []
     params = {"rid": row_id}
     for k, v in updates.items():
-        if k not in cols:
+        if k not in column_names:
             continue
         if k in protected:
             continue
@@ -928,15 +946,14 @@ def admin_db_table_row_insert(
     if not isinstance(values, dict) or not values:
         raise HTTPException(status_code=400, detail="No values provided")
     # Fetch columns & filter allowed
-    cols_res = session.exec(_sql_text(f"PRAGMA table_info({table_name})"))
-    cols = [c[1] for c in cols_res]
-    if not cols:
+    column_names = _db_get_columns(session, table_name)
+    if not column_names:
         raise HTTPException(status_code=400, detail="Unknown table or no columns")
     protected = {"created_at", "processed_at", "publish_at", "published_at", "spreaker_episode_id"}
     params = {}
     insert_cols = []
     for k, v in values.items():
-        if k not in cols:
+        if k not in column_names:
             continue
         if k in protected:
             continue

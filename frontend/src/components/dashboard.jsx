@@ -162,14 +162,15 @@ export default function PodcastPlusDashboard() {
       } else {
         const reason = statsRes.reason || {};
         if (reason.status === 401) {
-          console.warn('Stats fetch unauthorized, logging out', reason);
-          logout();
-          return;
+          console.warn('Stats fetch unauthorized; continuing without stats', reason);
+          setStatsError('You are not authorized to view stats.');
+          setStats(null);
+        } else {
+          // Non-fatal: show a gentle UI message
+          console.warn('Failed to load stats (non-fatal):', reason);
+          setStatsError('Failed to load stats.');
+          setStats(null);
         }
-        // Non-fatal: show a gentle UI message
-        console.warn('Failed to load stats (non-fatal):', reason);
-        setStatsError('Failed to load stats.');
-        setStats(null);
       }
     } catch (err) {
       // Unexpected error: don't immediately force logout unless it's a 401
