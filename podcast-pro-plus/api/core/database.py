@@ -1,52 +1,40 @@
 from sqlmodel import create_engine, SQLModel, Session
 from sqlalchemy.event import listen
-from sqlalchemy.engine import Engine
 from sqlalchemy import text
 import logging
 import os
+from urllib.parse import quote_plus
 
 # Ensure models are imported so SQLModel metadata is populated
 from ..models import user, podcast, settings as _app_settings  # noqa: F401
 # Import usage ledger model so metadata contains it during create_all
 from ..models import usage as _usage_models  # noqa: F401
-from .paths import WS_ROOT
 from pathlib import Path
 from .config import settings
 
 log = logging.getLogger(__name__)
 
-# --- Cloud SQL Connector ---
 IS_CLOUD_SQL = bool(settings.INSTANCE_CONNECTION_NAME)
 
 if IS_CLOUD_SQL:
-    from google.cloud.sql.connector import Connector, IPTypes
-    import pg8000
+    db_user = settings.DB_USER
+    db_pass = settings.DB_PASS
+    db_name = settings.DB_NAME
+    instance_connection = settings.INSTANCE_CONNECTION_NAME
+    db_socket_dir = os.getenv("DB_SOCKET_DIR", "/cloudsql")
+    socket_path = f"{db_socket_dir}/{instance_connection}"
 
-    connector = Connector()
-
-    def getconn() -> pg8000.dbapi.Connection:
-        conn: pg8000.dbapi.Connection = connector.connect(
-            settings.INSTANCE_CONNECTION_NAME,
-            "pg8000",
-            user=settings.DB_USER,
-            password=settings.DB_PASS,
-            db=settings.DB_NAME,
-            ip_type=IPTypes.PRIVATE,
-        )
-        return conn
-
+    # psycopg connection via Cloud SQL unix socket
+    password = quote_plus(db_pass)
     engine = create_engine(
-        "postgresql+pg8000://",
-        creator=getconn,
+        f"postgresql+psycopg://{db_user}:{password}@/{db_name}?host={socket_path}&port=5432",
         pool_pre_ping=True,
         pool_size=int(os.getenv("DB_POOL_SIZE", 5)),
         max_overflow=int(os.getenv("DB_MAX_OVERFLOW", 0)),
         pool_recycle=int(os.getenv("DB_POOL_RECYCLE", 180)),
         future=True,
     )
-
 else:
-    # --- SQLite Fallback ---
     _DB_PATH: Path = Path(os.getenv("SQLITE_PATH", "/tmp/ppp.db")).resolve()
     _DEFAULT_SQLITE_URL = f"sqlite:///{_DB_PATH.as_posix()}"
     engine = create_engine(
@@ -75,8 +63,8 @@ def _ensure_episode_new_columns():
     if not _is_sqlite_engine():
         return
     wanted = {
-    "season_number": "INTEGER",
-    "episode_number": "INTEGER",
+        "season_number": "INTEGER",
+        "episode_number": "INTEGER",
         "remote_cover_url": "TEXT",
         "spreaker_publish_error": "TEXT",
         "spreaker_publish_error_detail": "TEXT",
@@ -159,13 +147,10 @@ def _ensure_template_new_columns():
 
 
 def create_db_and_tables():
-    # Create any new tables first.
     SQLModel.metadata.create_all(engine)
-    # Then perform lightweight additive migrations.
     _ensure_episode_new_columns()
     _ensure_podcast_new_columns()
-    _ensure_template__new_columns()
-    # Opportunistically create AppSetting table if missing (older deployments)
+    _ensure_template_new_columns()
     if _is_sqlite_engine():
         try:
             with engine.connect() as conn:
@@ -183,11 +168,10 @@ CREATE TABLE appsetting (
                     ))
                     conn.commit()
         except Exception:
-            # best-effort; table may already exist
             pass
 
 
 def get_session():
-    # Provide a database session to your API endpoints.
     with Session(engine) as session:
         yield session
+

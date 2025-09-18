@@ -23,7 +23,7 @@ def _normalize_episode_paths() -> None:
     """Ensure Episode paths store only basenames for local files."""
     session: _Session = next(get_session())
     try:
-                q = select(Episode).limit(5000)
+        q = select(Episode).limit(5000)
         eps = session.exec(q).all()
         changed = 0
         for e in eps:
@@ -54,7 +54,7 @@ def _normalize_podcast_covers() -> None:
     """Ensure Podcast.cover_path stores only a basename if it's a local path."""
     session: _Session = next(get_session())
     try:
-                q = select(Podcast).limit(5000)
+        q = select(Podcast).limit(5000)
         pods = session.exec(q).all()
         changed = 0
         for p in pods:
@@ -275,7 +275,7 @@ def _backfill_mediaitem_expires_at() -> None:
     try:
         from api.models.podcast import MediaItem, MediaCategory
 
-                q = select(MediaItem).filter((MediaItem.expires_at == None)).limit(5000)  # type: ignore
+        q = select(MediaItem).filter((MediaItem.expires_at == None)).limit(5000)  # type: ignore
         items = session.exec(q).all()
         changed = 0
         for m in items:

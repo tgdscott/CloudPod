@@ -1,5 +1,5 @@
 ### Stage 1: build frontend (node)
-FROM node:18-alpine as frontend-builder
+FROM node:20.19-alpine as frontend-builder
 WORKDIR /app/frontend
 
 # Copy only frontend sources needed for install/build to leverage caching
@@ -31,7 +31,7 @@ RUN mkdir -p /app/static_ui
 COPY --from=frontend-builder /app/frontend/dist /app/static_ui
 
 # Install python deps
-RUN python -m pip install --upgrade pip setuptools wheel     && pip install --no-cache-dir -r /app/podcast-pro-plus/requirements.txt     && pip check     && python -c "import importlib; [importlib.import_module(m) for m in ('jose','passlib','feedparser','stripe','celery','google.cloud.storage','authlib','pg8000','google.cloud.sql.connector')]"
+RUN python -m pip install --upgrade pip setuptools wheel     && pip install --no-cache-dir -r /app/podcast-pro-plus/requirements.txt     && pip check     && python -c "import importlib; [importlib.import_module(m) for m in ('jose','passlib','feedparser','stripe','celery','google.cloud.storage','authlib','psycopg')]"
 
 ENV PYTHONPATH=/app/podcast-pro-plus
 

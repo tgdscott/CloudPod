@@ -20,8 +20,7 @@ python-jose[cryptography]
 passlib[bcrypt]
 feedparser
 stripe
-pg8000
-cloud-sql-python-connector[psycopg]
+psycopg[binary]
 celery
 google-cloud-storage
 authlib
