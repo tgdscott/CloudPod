@@ -514,8 +514,11 @@ export default function AdminDashboard() {
                     </TableHeader>
                     <TableBody>
                       {currentUsers.map(user => {
-                        const displayName = user.email || 'User';
-                        const initials = (displayName.split('@')[0] || 'U').slice(0,2).toUpperCase();
+                        const rawName = user?.email || user?.first_name || user?.last_name || 'User';
+                        const safeName = String(rawName || 'User');
+                        const emailPart = safeName.includes('@') ? safeName.split('@')[0] : safeName;
+                        const initials = (emailPart || 'U').slice(0, 2).toUpperCase();
+                        const displayName = safeName;
                         return (
                           <TableRow key={user.id} className="hover:bg-gray-50">
                             <TableCell>

@@ -24,7 +24,26 @@ import { useBrand } from "@/brand/BrandContext.jsx";
 import Logo from "@/components/Logo.jsx";
 
 
-// --- Login Modal Component ---
+// Determine API base URL at runtime. Prefer build-time Vite env, otherwise
+// derive from the current origin (swap app->api) so requests never hit the
+// static frontend which returns 405 on POST.
+const runtimeApiBase = (() => {
+  const env = import.meta.env?.VITE_API_BASE || import.meta.env?.VITE_API_BASE_URL;
+  if (env && typeof env === 'string') return env.replace(/\/+$/, '');
+  if (typeof window !== 'undefined') {
+    const origin = window.location.origin;
+    if (origin.includes('app.')) return origin.replace('app.', 'api.');
+    return origin;
+  }
+  return '';
+})();
+
+const apiUrl = (path) => {
+  if (!path) return runtimeApiBase;
+  if (/^https?:\/\//i.test(path)) return path;
+  return `${runtimeApiBase}${path}`;
+};
+
 const LoginModal = ({ onClose }) => {
     const { login } = useAuth();
     const [email, setEmail] = useState('');
@@ -32,16 +51,42 @@ const LoginModal = ({ onClose }) => {
     const [error, setError] = useState('');
     const [mode, setMode] = useState('login'); // 'login' | 'register'
 
+    const attemptEmailLogin = async () => {
+        const params = new URLSearchParams({ username: email, password });
+        try {
+            const res = await fetch(apiUrl('/api/auth/token'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: params.toString(),
+                credentials: 'include',
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok && data && data.access_token) {
+                login(data.access_token);
+                onClose();
+                return;
+            }
+            if (res.status === 401) {
+                setError('Invalid email or password.');
+            } else {
+                setError(data?.detail || data?.message || 'An unexpected error occurred. Please try again.');
+            }
+            throw new Error('login_failed');
+        } catch (err) {
+            if (err.message !== 'login_failed') {
+                setError('An unexpected error occurred. Please try again.');
+            }
+            throw err;
+        }
+    };
+
     const handleEmailLogin = async (e) => {
         e.preventDefault();
         setError('');
         try {
-          // use the api client to POST form-encoded token request
-          const res = await makeApi().raw('/api/auth/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ username: email, password }) });
-          // makeApi.raw returns parsed JSON for JSON responses
-          if (res && res.access_token) { login(res.access_token); onClose(); } else { setError('Invalid email or password.'); }
-        } catch (err) {
-            setError('An unexpected error occurred. Please try again.');
+            await attemptEmailLogin();
+        } catch (_) {
+            // error already surfaced via setError
         }
     };
 
@@ -49,14 +94,26 @@ const LoginModal = ({ onClose }) => {
         e.preventDefault();
         setError('');
         try {
-      const res = await makeApi().post('/api/auth/register', { email, password });
-      if (res && !(res.status && res.status >= 400)) {
-        await handleEmailLogin(e);
-      } else {
-        setError((res && res.detail) ? res.detail : 'Registration failed.');
-      }
+            const res = await fetch(apiUrl('/api/auth/register'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password }),
+                credentials: 'include',
+            });
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                if (res.status === 400) {
+                    setError(data?.detail || 'A user with this email already exists.');
+                } else if (res.status === 422) {
+                    setError('Invalid email or password format.');
+                } else {
+                    setError(data?.detail || data?.message || 'Registration error. Please try again.');
+                }
+                return;
+            }
+            await attemptEmailLogin();
         } catch (err) {
-            setError('Registration error. Please try again.');
+            setError(prev => prev || 'Registration error. Please try again.');
         }
     };
 

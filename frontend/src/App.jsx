@@ -19,7 +19,7 @@ import MetaHead from '@/components/MetaHead.jsx';
 const isAdmin = (user) => !!(user && (user.is_admin || user.role === 'admin'));
 
 export default function App() {
-    const { isAuthenticated, token, login, logout, user, refreshUser } = useAuth();
+    const { isAuthenticated, token, login, logout, user, refreshUser, hydrated } = useAuth(); 
     const [isLoading, setIsLoading] = useState(true);
     const [postCheckout, setPostCheckout] = useState(false);
     const [postCheckoutStartedAt, setPostCheckoutStartedAt] = useState(null);
@@ -71,7 +71,7 @@ export default function App() {
     }, [postCheckout, isAuthenticated, refreshUser]);
     // Fetch podcasts once after auth to decide onboarding vs dashboard (must be before any returns)
     useEffect(() => {
-        if(!isAuthenticated || podcastCheck.fetched) return;
+        if(!isAuthenticated || podcastCheck.fetched || !hydrated) return;
         let cancelled = false;
         (async () => {
             try {
@@ -84,14 +84,14 @@ export default function App() {
             } catch { if(!cancelled) setPodcastCheck({ loading:false, count:0, fetched: true }); }
         })();
         return () => { cancelled = true; };
-    }, [isAuthenticated, token, podcastCheck.fetched]);
+    }, [isAuthenticated, token, podcastCheck.fetched, hydrated]);
 
     // Admin preflight: verify backend allows /api/admin/* before rendering AdminDashboard
     useEffect(() => {
         let cancelled = false;
         (async () => {
             setAdminCheck(prev => ({...prev, checked: false, allowed: false}));
-            if (!isAuthenticated || !user || !isAdmin(user)) { setAdminCheck({ checked: true, allowed: false }); return; }
+            if (!isAuthenticated || !hydrated || !user || !isAdmin(user)) { setAdminCheck({ checked: true, allowed: false }); return; }
             try {
                 const api = makeApi(token);
                 await api.get('/api/admin/summary');
@@ -105,10 +105,11 @@ export default function App() {
             }
         })();
         return () => { cancelled = true; };
-    }, [isAuthenticated, token, user]);
+    }, [isAuthenticated, token, user, hydrated]);
 
     // --- Render decisions (after all hooks declared) ---
     const path = window.location.pathname;
+    if (!hydrated) return <div className="flex items-center justify-center h-screen">Loading...</div>;
     // If account is inactive, always show the closed alpha gate regardless of route
     if (user && user.is_active === false) {
         return <ClosedAlphaGate />;

@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlmodel import select, Session as _Session
 from sqlmodel import select
+from sqlalchemy import inspect, text
 
 from api.core.database import get_session, engine, create_db_and_tables
 from api.models.podcast import Episode, Podcast
@@ -245,6 +246,32 @@ CREATE TABLE subscription (
         log.warning("[migrate] Skipped some migrations: %s", e)
 
 
+def _ensure_user_admin_column() -> None:
+    """Ensure the user table has an is_admin flag (SQLite + Postgres)."""
+    try:
+        inspector = inspect(engine)
+        cols = {col["name"] for col in inspector.get_columns("user")}
+    except Exception as e:  # pragma: no cover - best effort
+        log.warning("[migrate] Could not inspect user table for is_admin: %s", e)
+        return
+
+    if "is_admin" in cols:
+        return
+
+    dialect = engine.dialect.name.lower()
+    if "sqlite" in dialect:
+        stmt = "ALTER TABLE user ADD COLUMN is_admin INTEGER DEFAULT 0"
+    else:
+        stmt = 'ALTER TABLE "user" ADD COLUMN is_admin BOOLEAN DEFAULT FALSE'
+
+    try:
+        with engine.begin() as conn:
+            conn.execute(text(stmt))
+        log.info("[migrate] Added user.is_admin column")
+    except Exception as e:  # pragma: no cover - additive migration best effort
+        log.warning("[migrate] Could not add user.is_admin column: %s", e)
+
+
 def _compute_pt_expiry(created_at_utc: datetime, days: int = 14) -> datetime:
     """Compute UTC expiry aligned to 2am America/Los_Angeles."""
     try:
@@ -306,6 +333,7 @@ def run_startup_tasks() -> None:
 
     _normalize_episode_paths()
     _normalize_podcast_covers()
+    _ensure_user_admin_column()
     _ensure_user_subscription_column()
     _backfill_mediaitem_expires_at()
 

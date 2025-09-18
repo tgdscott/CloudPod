@@ -69,11 +69,11 @@ try {
 }
 
 const router = createBrowserRouter([
-  {
-    path: '/',
-    element: <AppWithToasterWrapper />,
-    errorElement: <ErrorPage />,
-  },
+  { path: '/', element: <AppWithToasterWrapper />, errorElement: <ErrorPage /> },
+  { path: '/admin', element: <AppWithToasterWrapper />, errorElement: <ErrorPage /> },
+  { path: '/admin/*', element: <AppWithToasterWrapper />, errorElement: <ErrorPage /> },
+  { path: '/dashboard', element: <AppWithToasterWrapper />, errorElement: <ErrorPage /> },
+  { path: '/dashboard/*', element: <AppWithToasterWrapper />, errorElement: <ErrorPage /> },
   { path: '/ab', element: <ABPreview /> },
   { path: '/onboarding-demo', element: <OnboardingDemo /> },
   { path: '/onboarding', element: <Onboarding /> },

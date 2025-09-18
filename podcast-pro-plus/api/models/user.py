@@ -34,6 +34,7 @@ class User(UserBase, table=True):
     subscription_expires_at: Optional[datetime] = Field(default=None, description="When the paid subscription ends")
     # Nullable last_login; populated on successful auth events
     last_login: Optional[datetime] = Field(default=None, description="Timestamp of last successful login")
+    is_admin: bool = Field(default=False, description="Whether this user has admin privileges")
 
     # This creates the link back to the templates that belong to this user
     templates: List["PodcastTemplate"] = Relationship(back_populates="user")

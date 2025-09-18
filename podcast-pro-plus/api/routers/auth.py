@@ -108,6 +108,8 @@ async def login_for_access_token(
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    if user.email and user.email.lower() == settings.ADMIN_EMAIL.lower():
+        user.is_admin = True
     user.last_login = datetime.utcnow()
     session.add(user)
     session.commit()
@@ -137,6 +139,8 @@ async def login_for_access_token_json(
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    if user.email and user.email.lower() == settings.ADMIN_EMAIL.lower():
+        user.is_admin = True
     user.last_login = datetime.utcnow()
     session.add(user)
     session.commit()

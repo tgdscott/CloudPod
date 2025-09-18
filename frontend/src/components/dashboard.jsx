@@ -343,7 +343,8 @@ export default function PodcastPlusDashboard() {
             <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
               <div>
                 <h1 className="text-3xl md:text-4xl font-bold tracking-tight" style={{ color: '#2C3E50' }}>
-                  Welcome back{user && `, ${user.first_name || user.email.split('@')[0]}`}!
+                  Welcome back
+                  {user ? `, ${user.first_name || (user.email ? user.email.split('@')[0] : 'friend')}` : ''}!
                 </h1>
                 <p className="text-sm md:text-base text-gray-600 mt-1">Quick launch your next episode or jump into a tool.</p>
               </div>
