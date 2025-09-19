@@ -127,9 +127,9 @@ export default function Onboarding() {
       // Step 3: About your show
       { id: 'showDetails', title: 'About your show', description: 'Tell us the name and what it’s about. You can change this later.' },
       { id: 'format', title: 'Format', description: 'How will most episodes feel?' },
-      { id: 'coverArt', title: 'Cover art', description: 'Upload a square image (≥1400×1400). We’ll preview it.' },
+      { id: 'coverArt', title: 'Podcast Cover Art (optional)', description: "Upload your podcast cover art. A square picture at least 1400 pixels wide works best. Don't worry if it's not perfect; we'll crop it to fit. If you don't have one yet, no problem." },
       { id: 'music', title: 'Music (optional)', description: 'Pick intro/outro music (optional).' },
-  { id: 'spreaker', title: 'Connect hosting (Spreaker)', description: 'Link your hosting so episodes can publish.' },
+  { id: 'spreaker', title: 'Connect hosting', description: "We partner with Spreaker to host your podcast." },
       // Step 8: Publish cadence
       { id: 'publishCadence', title: 'How often will you publish?', description: 'I want to publish X times every …' },
       // Step 9: Conditional schedule details
@@ -302,9 +302,9 @@ export default function Onboarding() {
       s.id === 'choosePath' ? 'Not sure? You can switch paths at the top.' :
       s.id === 'showDetails' ? 'Short and clear works best.' :
       s.id === 'format' ? 'You can mix it up later.' :
-      s.id === 'coverArt' ? 'No artwork yet? You can skip and add it later.' :
+      s.id === 'coverArt' ? 'No artwork yet? You can always add it later.' :
       s.id === 'music' ? 'Choose “No Music” to decide later.' :
-      s.id === 'spreaker' ? 'Keep your phone nearby for codes.' :
+      s.id === 'spreaker' ? 'We partner with Spreaker to host your podcast.' :
       s.id === 'publishCadence' ? 'Bi-weekly always means once every two weeks.' :
       s.id === 'publishSchedule' ? 'Consistency beats volume.' :
       s.id === 'rss' ? 'Paste your feed URL.' :

@@ -51,6 +51,9 @@ export default function OnboardingWrapper({ steps, index, setIndex, onComplete, 
   const contentRef = useRef(null);
   const headingRef = useRef(null);
 
+  const AUTOSAVE_IDLE_MS = 15000; // milliseconds of inactivity before showing the saved cue
+  const AUTOSAVE_DISPLAY_MS = 2000; // how long the saved cue remains visible
+
   // Debounced autosave cue
   const [savedVisible, setSavedVisible] = useState(false);
   const [liveMsg, setLiveMsg] = useState("");
@@ -161,7 +164,7 @@ export default function OnboardingWrapper({ steps, index, setIndex, onComplete, 
       if (saveTimer.current) clearTimeout(saveTimer.current);
       if (hideTimer.current) clearTimeout(hideTimer.current);
       setSavedVisible(false);
-      // Idle 500ms -> show Saved
+      // Idle window before showing the saved cue
       saveTimer.current = setTimeout(() => {
         setSavedVisible(true);
         setLiveMsg("Saved");
@@ -169,8 +172,8 @@ export default function OnboardingWrapper({ steps, index, setIndex, onComplete, 
         hideTimer.current = setTimeout(() => {
           setSavedVisible(false);
           setLiveMsg("");
-        }, 1500);
-      }, 500);
+        }, AUTOSAVE_DISPLAY_MS);
+      }, AUTOSAVE_IDLE_MS);
     };
     el.addEventListener("input", onInput, true);
     return () => {
@@ -191,7 +194,7 @@ export default function OnboardingWrapper({ steps, index, setIndex, onComplete, 
             </h1>
             <div className="flex items-center justify-between gap-4">
               <div className="text-sm text-muted-foreground">
-                Step {index + 1} of {total} • {pct}% complete
+                Step {index + 1} • {pct}% complete
               </div>
               <div className="flex items-center gap-3">
                 <div className="hidden md:block w-56">
@@ -227,13 +230,13 @@ export default function OnboardingWrapper({ steps, index, setIndex, onComplete, 
               aria-live="polite"
               aria-atomic="true"
             >
-              {`Step ${index + 1} of ${total}: ${step?.title || ''}${liveMsg ? ` — ${liveMsg}` : ''}`}
+              {`Step ${index + 1}: ${step?.title || ''}${liveMsg ? ` — ${liveMsg}` : ''}`}
             </div>
             {/* Screen-reader progress list with aria-current */}
             <nav className="sr-only" aria-label="Step Progress">
               <ol>
                 {steps.map((s, i) => (
-                  <li key={s.id} aria-current={i === index ? "step" : undefined}>{`Step ${i + 1} of ${total}: ${s.title}`}</li>
+                  <li key={s.id} aria-current={i === index ? "step" : undefined}>{`Step ${i + 1}: ${s.title}`}</li>
                 ))}
               </ol>
             </nav>
@@ -248,7 +251,7 @@ export default function OnboardingWrapper({ steps, index, setIndex, onComplete, 
                 tabIndex={-1}
                 className="text-lg md:text-xl font-medium flex items-center gap-2"
               >
-                {`Step ${index + 1} of ${total}: ${step?.title || ''}`}
+                {`Step ${index + 1}: ${step?.title || ''}`}
                 {/* Visible Saved cue (aria-hidden) */}
                 {savedVisible && (
                   <span className="inline-flex items-center gap-1 text-xs text-muted-foreground" aria-hidden="true">

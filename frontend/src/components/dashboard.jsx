@@ -356,6 +356,12 @@ export default function PodcastPlusDashboard() {
                 {statsError}
               </div>
             )}
+            {!statsError && stats?.spreaker_connected === false && (
+              <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded p-3 mb-4 text-sm flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <span>Connect your Spreaker account to unlock listening stats and analytics.</span>
+                <Button variant="outline" size="sm" onClick={() => setCurrentView('settings')}>Connect Spreaker</Button>
+              </div>
+            )}
             <div className="grid lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 space-y-6">
                 {/* Create Episode Card */}

@@ -20,6 +20,8 @@ export default function PodcastManager({ onBack, token, podcasts, setPodcasts })
   const [podcastToEdit, setPodcastToEdit] = useState(null);
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const { toast } = useToast();
+  const rawFullpage = import.meta.env?.VITE_ONBOARDING_FULLPAGE ?? import.meta.env?.ONBOARDING_FULLPAGE;
+  const fullPageOnboarding = rawFullpage === undefined ? true : String(rawFullpage).toLowerCase() === 'true';
 
   const openEditDialog = (podcast) => {
     setPodcastToEdit(podcast);
@@ -46,9 +48,8 @@ export default function PodcastManager({ onBack, token, podcasts, setPodcasts })
   };
 
   const openWizard = () => {
-    const FULLPAGE = (import.meta.env?.VITE_ONBOARDING_FULLPAGE === 'true') || (import.meta.env?.ONBOARDING_FULLPAGE === 'true');
     // If full-page onboarding is enabled, steer users to /onboarding instead of opening the modal
-    if (FULLPAGE) {
+    if (fullPageOnboarding) {
       try { window.location.href = '/onboarding'; } catch {}
     } else {
       setIsWizardOpen(true);
@@ -143,7 +144,7 @@ export default function PodcastManager({ onBack, token, podcasts, setPodcasts })
       <div className="text-center py-10">
     <p className="mb-4">You haven't created any podcasts yet.</p>
         <Button onClick={openWizard}>
-          <Plus className="w-4 h-4 mr-2" /> {(import.meta.env?.VITE_ONBOARDING_FULLPAGE === 'true' || import.meta.env?.ONBOARDING_FULLPAGE === 'true') ? 'Get started' : 'Create Your First Show'}
+          <Plus className="w-4 h-4 mr-2" /> {fullPageOnboarding ? 'Get started' : 'Create Your First Show'}
         </Button>
       </div>
           )}
@@ -196,7 +197,7 @@ export default function PodcastManager({ onBack, token, podcasts, setPodcasts })
       )}
 
       {/* New User Wizard (fallback, behind feature flag) */}
-      {!(import.meta.env?.VITE_ONBOARDING_FULLPAGE === 'true' || import.meta.env?.ONBOARDING_FULLPAGE === 'true') && (
+      {!fullPageOnboarding && (
         <NewUserWizard
           open={isWizardOpen}
           onOpenChange={setIsWizardOpen}

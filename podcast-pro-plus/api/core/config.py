@@ -1,5 +1,7 @@
-from pydantic_settings import BaseSettings
 from typing import Optional
+
+from pydantic import model_validator
+from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     # --- Core Infrastructure ---
@@ -19,7 +21,7 @@ class Settings(BaseSettings):
     SPREAKER_API_TOKEN: str
     SPREAKER_CLIENT_ID: str
     SPREAKER_CLIENT_SECRET: str
-    SPREAKER_REDIRECT_URI: str = "https://chimp-big-wildly.ngrok-free.app/api/spreaker/auth/callback"
+    SPREAKER_REDIRECT_URI: Optional[str] = None
 
     # --- Google OAuth ---
     GOOGLE_CLIENT_ID: str
@@ -38,6 +40,19 @@ class Settings(BaseSettings):
     # --- JWT Settings ---
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
+
+    @property
+    def cors_allowed_origin_list(self) -> list[str]:
+        raw = self.CORS_ALLOWED_ORIGINS or ""
+        normalized = raw.replace(';', ',')
+        return [origin.strip() for origin in normalized.split(',') if origin.strip()]
+
+    @model_validator(mode="after")
+    def _apply_spreaker_defaults(self):
+        if not self.SPREAKER_REDIRECT_URI:
+            base = (self.OAUTH_BACKEND_BASE or "https://api.getpodcastplus.com").rstrip("/")
+            self.SPREAKER_REDIRECT_URI = f"{base}/api/spreaker/auth/callback"
+        return self
 
     class Config:
         env_file = ".env"

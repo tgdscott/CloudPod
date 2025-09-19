@@ -84,7 +84,7 @@ export default function OnboardingWrapper({ steps, index, setIndex, onComplete, 
             </h1>
             <div className="flex items-center justify-between gap-4">
               <div className="text-sm text-muted-foreground">
-                Step {index + 1} of {total} • {pct}% complete
+                Step {index + 1} • {pct}% complete
               </div>
               <div className="w-1/2 min-w-[200px]">
                 <Progress value={pct} />

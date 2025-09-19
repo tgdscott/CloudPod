@@ -482,7 +482,8 @@ export default function OnboardingWizard(){
         )}
   {newStep==='cover' && (
           <div>
-            <h2 className="text-xl font-semibold mb-2">Cover art</h2>
+            <h2 className="text-xl font-semibold mb-2">Podcast Cover Art (optional)</h2>
+            <p className="text-sm text-gray-600 mb-3">Upload your podcast cover art. A square picture at least 1400 pixels wide works best. Don't worry if it's not perfect; we'll crop it to fit. If you don't have one yet, no problem.</p>
             <div className="flex flex-col gap-2 mb-3">
               <label className={`border rounded p-2 cursor-pointer ${coverMode==='upload'?'border-blue-600':'hover:border-gray-400'}`}>
                 <input type="radio" name="cover" className="mr-2" checked={coverMode==='upload'} onChange={()=>setCoverMode('upload')} />Upload my own image
@@ -545,10 +546,10 @@ export default function OnboardingWizard(){
         )}
         {newStep==='spreaker' && (
           <div>
-            <h2 className="text-xl font-semibold mb-2">Connect hosting (Spreaker)</h2>
+            <h2 className="text-xl font-semibold mb-2">Connect hosting</h2>
             {!spreakerSaved && (
               <div className="space-y-4 text-sm text-gray-700 mb-4">
-                <p>Sign in to Spreaker so we can set up your show and publish for you.</p>
+                <p>We partner with Spreaker to host your podcast.</p>
                 <button
                     onClick={async () => {
                     try {

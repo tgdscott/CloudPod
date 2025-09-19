@@ -6,6 +6,7 @@ from sqlmodel import Session
 import requests
 from urllib.parse import urlencode
 
+import os
 from api.core.config import settings
 from api.core.database import get_session
 from api.routers.auth import get_current_user, create_access_token
@@ -33,6 +34,11 @@ def _verify_state(state: str) -> str:
 
 import logging
 log = logging.getLogger(__name__)
+
+_APP_BASE_URL = (os.getenv("APP_BASE_URL") or "https://app.getpodcastplus.com").rstrip("/")
+if not _APP_BASE_URL:
+    _APP_BASE_URL = "https://app.getpodcastplus.com"
+_SPREAKER_SUCCESS_REDIRECT = f"{_APP_BASE_URL}/dashboard?spreaker_connected=true"
 
 @router.get("/start")
 def spreaker_oauth_start(
@@ -118,13 +124,33 @@ def spreaker_oauth_callback(code: str, state: str, session: Session = Depends(ge
         user.spreaker_refresh_token = refresh
     session.add(user)
     session.commit()
-    html = """
+    html = f"""
 <!DOCTYPE html><html><body style='font-family:sans-serif;'>
 <h3>Spreaker Connected</h3>
-<p>You can close this window.</p>
+<p>You can close this window and return to the app.</p>
 <script>
-  try { window.opener && window.opener.postMessage({ type:'spreaker_connected' }, '*'); } catch(e) {}
-  setTimeout(()=> { window.close(); }, 800);
+  (function() {
+    const target = "{_SPREAKER_SUCCESS_REDIRECT}";
+    function notify() {
+      try {
+        if (window.opener && !window.opener.closed) {
+          window.opener.postMessage({ type: 'spreaker_connected' }, '*');
+        }
+      } catch (err) {}
+    }
+    function closeOrRedirect() {
+      notify();
+      let closed = false;
+      try {
+        window.close();
+        closed = window.closed;
+      } catch (err) {}
+      if (!closed) {
+        window.location.href = target;
+      }
+    }
+    setTimeout(closeOrRedirect, 400);
+  })();
 </script>
 </body></html>
 """

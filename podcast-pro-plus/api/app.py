@@ -77,7 +77,7 @@ app.add_middleware(SessionMiddleware,
 )
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ALLOWED_ORIGINS.split(","),
+    allow_origins=settings.cors_allowed_origin_list,
     allow_methods=["*"],
     allow_headers=["*"],
     allow_credentials=True,

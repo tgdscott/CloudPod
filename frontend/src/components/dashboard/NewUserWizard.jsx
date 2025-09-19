@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -21,6 +21,28 @@ const NewUserWizard = ({ open, onOpenChange, token, onPodcastCreated }) => {
   const [isSpreakerConnected, setIsSpreakerConnected] = useState(false);
   const { toast } = useToast();
 
+  const pollRef = useRef(null);
+  const announceConnected = useCallback(() => {
+    setIsSpreakerConnected(prev => {
+      if (!prev) {
+        toast({ title: "Success!", description: "Your Spreaker account is now connected." });
+      }
+      return true;
+    });
+  }, [toast]);
+
+  const verifyConnection = useCallback(async () => {
+    if (!token) return false;
+    try {
+      const user = await makeApi(token).get('/api/auth/users/me');
+      if (user?.spreaker_access_token) {
+        announceConnected();
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }, [announceConnected, token]);
+
   // Feature flag: hide BYOK (Bring Your Own Key) for ElevenLabs for now.
   // Toggle with VITE_ENABLE_BYOK=true if we want to re-enable the step.
   const ENABLE_BYOK = (import.meta.env?.VITE_ENABLE_BYOK === 'true');
@@ -28,7 +50,7 @@ const NewUserWizard = ({ open, onOpenChange, token, onPodcastCreated }) => {
   const wizardSteps = [
     { id: 'welcome', title: 'Welcome' },
     { id: 'showDetails', title: 'About your show' },
-    { id: 'coverArt', title: 'Cover art' },
+    { id: 'coverArt', title: 'Podcast Cover Art (optional)' },
     { id: 'spreaker', title: 'Connect hosting' },
     ...(
       ENABLE_BYOK
@@ -43,15 +65,29 @@ const NewUserWizard = ({ open, onOpenChange, token, onPodcastCreated }) => {
   useEffect(() => {
     const handleMessage = (event) => {
       if (event.origin !== window.location.origin) return;
-      if (event.data === 'spreaker_connected') {
-        setIsSpreakerConnected(true);
-        toast({ title: "Success!", description: "Your Spreaker account is now connected." });
+      const data = event.data;
+      if (data === 'spreaker_connected' || (data && data.type === 'spreaker_connected')) {
+        announceConnected();
+        if (pollRef.current) {
+          clearInterval(pollRef.current);
+          pollRef.current = null;
+        }
+        verifyConnection().catch(() => {});
       }
     };
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [toast]);
+  }, [announceConnected, verifyConnection]);
+
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    };
+  }, []);
 
   const nextStep = () => setStep((prev) => Math.min(prev + 1, totalSteps));
   const prevStep = () => setStep((prev) => Math.max(prev - 1, 1));
@@ -64,16 +100,24 @@ const NewUserWizard = ({ open, onOpenChange, token, onPodcastCreated }) => {
   const handleConnectSpreaker = async () => {
     try {
       const { auth_url } = await makeApi(token).get('/api/spreaker/auth/login');
+      if (!auth_url) throw new Error('Could not start the Spreaker sign-in.');
       const popup = window.open(auth_url, 'spreakerAuth', 'width=600,height=700');
-      const timer = setInterval(() => {
+      if (!popup) throw new Error('Popup blocked. Please allow popups and try again.');
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+      pollRef.current = setInterval(async () => {
         if (!popup || popup.closed) {
-          clearInterval(timer);
-          makeApi(token).get('/api/auth/users/me').then(user => { if (user?.spreaker_access_token) setIsSpreakerConnected(true); }).catch(()=>{});
+          if (pollRef.current) {
+            clearInterval(pollRef.current);
+            pollRef.current = null;
+          }
+          await verifyConnection();
         }
       }, 1000);
-
     } catch (error) {
-      toast({ title: "Connection Error", description: error.message, variant: "destructive" });
+      toast({ title: 'Connection Error', description: error?.message || 'Could not connect to Spreaker.', variant: 'destructive' });
     }
   };
 
@@ -108,7 +152,7 @@ const NewUserWizard = ({ open, onOpenChange, token, onPodcastCreated }) => {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[550px]">
         <DialogHeader>
-          <DialogTitle>Let's Create Your First Podcast! (Step {step} of {totalSteps})</DialogTitle>
+          <DialogTitle>Let's Create Your First Podcast! (Step {step})</DialogTitle>
         </DialogHeader>
 
   {stepId === 'welcome' && (
@@ -157,7 +201,7 @@ const NewUserWizard = ({ open, onOpenChange, token, onPodcastCreated }) => {
           <WizardStep>
             <h3 className="text-lg font-semibold mb-2">Connect hosting</h3>
             <DialogDescription className="mb-2">
-              Link your hosting so your episodes can publish. We’ll open a secure window.
+              We partner with Spreaker to host your podcast.
             </DialogDescription>
             <p className="text-xs text-gray-500 mb-4">Keep your phone nearby in case a code is needed.</p>
             <div className="flex justify-center items-center p-6 bg-gray-50 rounded-md">

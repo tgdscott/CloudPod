@@ -106,7 +106,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
         # Ensure CORS responses have explicit origin when credentials are required.
-        allowed_origins = [o.strip() for o in (settings.CORS_ALLOWED_ORIGINS.split(',')) if o.strip()]
+        allowed_origins = settings.cors_allowed_origin_list
         origin = request.headers.get('origin')
         if origin and origin in allowed_origins:
             response.headers['Access-Control-Allow-Origin'] = origin

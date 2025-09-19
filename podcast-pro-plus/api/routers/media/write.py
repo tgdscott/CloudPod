@@ -42,6 +42,13 @@ router = APIRouter(prefix="/media", tags=["Media Library"])
 MEDIA_BUCKET = os.getenv("MEDIA_BUCKET")
 
 
+def _require_bucket() -> str:
+    bucket = MEDIA_BUCKET or os.getenv("MEDIA_BUCKET")
+    if not bucket:
+        raise HTTPException(status_code=500, detail="Media storage bucket is not configured. Set the MEDIA_BUCKET environment variable.")
+    return bucket
+
+
 def parse_friendly_names(raw: str | None) -> list[str]:
     if not raw:
         return []
@@ -146,8 +153,9 @@ async def upload_media_files(
             if bytes_written > max_bytes:
                 raise HTTPException(status_code=413, detail="File too large.")
             data.extend(chunk)
+        bucket = _require_bucket()
         # Write to GCS
-        gcs_uri = upload_bytes(MEDIA_BUCKET, gcs_key, bytes(data), file.content_type or "application/octet-stream")
+        gcs_uri = upload_bytes(bucket, gcs_key, bytes(data), file.content_type or "application/octet-stream")
 
         friendly_name = names[i] if i < len(names) and str(names[i]).strip() else default_friendly_name
 

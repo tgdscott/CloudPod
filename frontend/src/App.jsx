@@ -142,15 +142,19 @@ export default function App() {
         if (podcastCheck.loading) return <div className="flex items-center justify-center h-screen">Preparing your workspace...</div>;
         // Only show onboarding wizard if explicitly requested via query param and no podcasts exist
         const params = new URLSearchParams(window.location.search);
-        const forceOnboarding = params.get('onboarding') === '1';
-        const FULLPAGE = (import.meta.env?.VITE_ONBOARDING_FULLPAGE === 'true') || (import.meta.env?.ONBOARDING_FULLPAGE === 'true');
-        // When full-page onboarding is enabled, steer new users (no podcasts) to the new page
-        if (FULLPAGE && podcastCheck.count === 0) {
-            return <Onboarding />;
+        const onboardingParam = params.get('onboarding');
+        const forceOnboarding = onboardingParam === '1';
+        const skipOnboarding = onboardingParam === '0' || params.get('skip_onboarding') === '1';
+        const rawFullpage = import.meta.env?.VITE_ONBOARDING_FULLPAGE ?? import.meta.env?.ONBOARDING_FULLPAGE;
+        const FULLPAGE = rawFullpage === undefined ? true : String(rawFullpage).toLowerCase() === 'true';
+        if (!skipOnboarding) {
+            if (FULLPAGE && (podcastCheck.count === 0 || forceOnboarding)) {
+                return <Onboarding />;
+            }
+            if (!FULLPAGE && (podcastCheck.count === 0 || forceOnboarding)) {
+                return <OnboardingWizard />;
+            }
         }
-        // Fallback: legacy modal wizard only when explicitly requested AND full-page onboarding is disabled
-        const shouldShowOnboarding = !FULLPAGE && forceOnboarding && podcastCheck.count === 0;
-        if (shouldShowOnboarding) return <OnboardingWizard />;
         // Admin gating: render Admin only after user is loaded and if checks pass
         if (isAdmin(user)) {
             if (!adminCheck.checked) return <div className="flex items-center justify-center h-screen">Checking admin access...</div>;

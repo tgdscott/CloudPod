@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import AudioCleanupSettings from "@/components/dashboard/AudioCleanupSettings";
 import AdminSettings from "@/components/dashboard/AdminSettings";
 import { useToast } from "@/hooks/use-toast";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useAuth } from "@/AuthContext.jsx";
 import { makeApi } from "@/lib/apiClient";
 
@@ -14,28 +14,91 @@ export default function Settings({ token }) {
   const { toast } = useToast();
   const { user: authUser, refreshUser } = useAuth();
   const [isSpreakerConnected, setIsSpreakerConnected] = useState(false);
+  const pollRef = useRef(null);
+
+  const announceConnected = useCallback(() => {
+    setIsSpreakerConnected(prev => {
+      if (!prev) {
+        toast({ title: 'Spreaker Connected', description: 'Your Spreaker account has been successfully connected!' });
+      }
+      return true;
+    });
+  }, [toast]);
+
+  const verifyConnection = useCallback(async () => {
+    if (!token) return false;
+    try {
+      const user = await makeApi(token).get('/api/auth/users/me');
+      if (user?.spreaker_access_token) {
+        announceConnected();
+        refreshUser?.({ force: true });
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }, [announceConnected, refreshUser, token]);
 
   useEffect(() => {
-    if (authUser) {
-  setIsSpreakerConnected(!!authUser.spreaker_access_token);
-    }
-    // Check for spreaker_connected query param after redirect
+    setIsSpreakerConnected(!!authUser?.spreaker_access_token);
+  }, [authUser]);
+
+  useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('spreaker_connected') === 'true') {
-      toast({ title: "Spreaker Connected", description: "Your Spreaker account has been successfully connected!" });
-      // Clear the query param to prevent toast on subsequent visits
+      announceConnected();
+      verifyConnection().catch(() => {});
       window.history.replaceState({}, document.title, window.location.pathname);
     }
-  }, [authUser, token]);
+  }, [announceConnected, verifyConnection]);
+
+  useEffect(() => {
+    const handleMessage = (event) => {
+      if (event.origin !== window.location.origin) return;
+      const data = event.data;
+      if (data === 'spreaker_connected' || (data && data.type === 'spreaker_connected')) {
+        if (pollRef.current) {
+          clearInterval(pollRef.current);
+          pollRef.current = null;
+        }
+        announceConnected();
+        verifyConnection().catch(() => {});
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [announceConnected, verifyConnection]);
+
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    };
+  }, []);
 
   const handleConnectSpreaker = async () => {
     try {
-  const api = makeApi(token);
-  const data = await api.get('/api/spreaker/auth/login');
-        window.location.href = data.auth_url;
-      
+      const { auth_url } = await makeApi(token).get('/api/spreaker/auth/login');
+      if (!auth_url) throw new Error('Could not start the Spreaker sign-in.');
+      const popup = window.open(auth_url, 'spreakerAuth', 'width=600,height=700');
+      if (!popup) throw new Error('Popup blocked. Please allow popups and try again.');
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+      pollRef.current = setInterval(async () => {
+        if (!popup || popup.closed) {
+          if (pollRef.current) {
+            clearInterval(pollRef.current);
+            pollRef.current = null;
+          }
+          await verifyConnection();
+        }
+      }, 1000);
     } catch (err) {
-  toast({ title: "Error", description: err.message || "An unexpected error occurred.", variant: "destructive" });
+      toast({ title: 'Connection Error', description: err?.message || 'An unexpected error occurred.', variant: 'destructive' });
     }
   };
 
