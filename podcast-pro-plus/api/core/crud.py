@@ -9,6 +9,29 @@ from ..models.podcast import Podcast, PodcastTemplate, PodcastTemplateCreate, Ep
 from ..models.subscription import Subscription
 
 # --- User CRUD ---
+
+def get_latest_terms_acceptance(session: Session, user_id: UUID):
+    statement = (
+        select(UserTermsAcceptance)
+        .where(UserTermsAcceptance.user_id == user_id)
+        .order_by(UserTermsAcceptance.accepted_at.desc())
+        .limit(1)
+    )
+    return session.exec(statement).first()
+
+
+def record_terms_acceptance(session: Session, user: User, version: str, ip: str | None = None, user_agent: str | None = None) -> UserTermsAcceptance:
+    event = UserTermsAcceptance(user_id=user.id, version=version, ip_address=ip, user_agent=user_agent)
+    user.terms_version_accepted = version
+    user.terms_accepted_at = event.accepted_at
+    user.terms_accepted_ip = ip
+    session.add(event)
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    session.refresh(event)
+    return event
+
 def get_user_by_email(session: Session, email: str) -> Optional[User]:
     statement = select(User).where(User.email == email)
     return session.exec(statement).first()

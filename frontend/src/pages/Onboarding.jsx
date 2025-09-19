@@ -7,7 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { CheckCircle, Play, Pause } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useComfortPrefs } from "@/hooks/useComfortPrefs";
+import { useComfort } from '@/ComfortContext.jsx';
+import { makeApi } from '@/lib/apiClient';
 import { FORMATS, NO_MUSIC_OPTION } from "@/components/onboarding/OnboardingWizard.jsx";
 
 export default function Onboarding() {
@@ -25,7 +26,7 @@ export default function Onboarding() {
     }
   });
   const stepSaveTimer = useRef(null);
-  const { largeText, setLargeText, highContrast, setHighContrast } = useComfortPrefs();
+  const { largeText, setLargeText, highContrast, setHighContrast } = useComfort();
 
   // Feature flag parity with modal wizard
   const ENABLE_BYOK = (import.meta.env?.VITE_ENABLE_BYOK === 'true');
@@ -108,10 +109,10 @@ export default function Onboarding() {
   if (path === 'import') {
       const importSteps = [
     { id: 'rss', title: 'Import from RSS', description: 'Paste your feed URL.' },
-    { id: 'confirm', title: 'Confirm import', description: 'We’ll mirror your setup and assets.' },
-    { id: 'importing', title: 'Importing…', description: 'Fetching episodes and metadata.' },
-    { id: 'analyze', title: 'Analyzing', description: 'We’ll bring over what we can—you can tidy later.' },
-    { id: 'assets', title: 'Assets', description: 'We’ll bring over what we can—you can tidy later.' },
+    { id: 'confirm', title: 'Confirm import', description: "We'll mirror your setup and assets." },
+    { id: 'importing', title: 'Importing...', description: 'Fetching episodes and metadata.' },
+    { id: 'analyze', title: 'Analyzing', description: "We'll bring over what we can, and you can tidy later." },
+    { id: 'assets', title: 'Assets', description: "We'll bring over what we can, and you can tidy later." },
         { id: 'importSuccess', title: 'Imported', description: 'Your show is now in Podcast Pro Plus.' },
       ];
   // Import path after branching at Step 2
@@ -125,13 +126,13 @@ export default function Onboarding() {
       // Step 2: Choose path
       choosePathStep,
       // Step 3: About your show
-      { id: 'showDetails', title: 'About your show', description: 'Tell us the name and what it’s about. You can change this later.' },
+      { id: 'showDetails', title: 'About your show', description: "Tell us the name and what it's about. You can change this later." },
       { id: 'format', title: 'Format', description: 'How will most episodes feel?' },
       { id: 'coverArt', title: 'Podcast Cover Art (optional)', description: "Upload your podcast cover art. A square picture at least 1400 pixels wide works best. Don't worry if it's not perfect; we'll crop it to fit. If you don't have one yet, no problem." },
       { id: 'music', title: 'Music (optional)', description: 'Pick intro/outro music (optional).' },
   { id: 'spreaker', title: 'Connect hosting', description: "We partner with Spreaker to host your podcast." },
       // Step 8: Publish cadence
-      { id: 'publishCadence', title: 'How often will you publish?', description: 'I want to publish X times every …' },
+      { id: 'publishCadence', title: 'How often will you publish?', description: 'I want to publish X times every ...' },
       // Step 9: Conditional schedule details
       { id: 'publishSchedule', title: 'Publishing days', description: 'Pick your publishing days/dates.' },
       { id: 'finish', title: 'Finish', description: 'Nice work. You can publish now or explore your dashboard.' },
@@ -298,19 +299,19 @@ export default function Onboarding() {
     title: s.title,
     description: s.description,
     tip: (
-      s.id === 'yourName' ? 'We’ll use this to personalize your dashboard.' :
+      s.id === 'yourName' ? "We'll use this to personalize your dashboard." :
       s.id === 'choosePath' ? 'Not sure? You can switch paths at the top.' :
       s.id === 'showDetails' ? 'Short and clear works best.' :
       s.id === 'format' ? 'You can mix it up later.' :
       s.id === 'coverArt' ? 'No artwork yet? You can always add it later.' :
-      s.id === 'music' ? 'Choose “No Music” to decide later.' :
+      s.id === 'music' ? 'Choose "No Music" to decide later.' :
       s.id === 'spreaker' ? 'We partner with Spreaker to host your podcast.' :
       s.id === 'publishCadence' ? 'Bi-weekly always means once every two weeks.' :
       s.id === 'publishSchedule' ? 'Consistency beats volume.' :
       s.id === 'rss' ? 'Paste your feed URL.' :
-      s.id === 'analyze' ? 'We’ll bring over what we can—you can tidy later.' :
-      s.id === 'assets' ? 'We’ll bring over what we can—you can tidy later.' :
-      s.id === 'finish' ? 'There’s a short tour next if you’d like it.' : ''
+      s.id === 'analyze' ? "We'll bring over what we can, and you can tidy later." :
+      s.id === 'assets' ? "We'll bring over what we can, and you can tidy later." :
+      s.id === 'finish' ? "There's a short tour next if you'd like it." : ''
     ),
     render: () => {
       switch (s.id) {
@@ -341,7 +342,7 @@ export default function Onboarding() {
                   onClick={() => { setPath('import'); setStepIndex(0); }}
                 >Import existing</Button>
               </div>
-              <p className="text-sm text-muted-foreground">You can’t break anything. We save as you go.</p>
+              <p className="text-sm text-muted-foreground">You can't break anything. We save as you go.</p>
             </div>
           );
         case 'showDetails':
@@ -381,7 +382,7 @@ export default function Onboarding() {
           return (
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                {musicLoading ? 'Loading music…' : 'Pick a track or choose “No Music”.'}
+                {musicLoading ? 'Loading music...' : 'Pick a track or choose "No Music".'}
               </div>
               <div className="grid gap-2">
                 {musicAssets.map(a => {
@@ -446,7 +447,7 @@ export default function Onboarding() {
                 </select>
               </div>
               {cadenceError && <p className="text-sm text-red-600">{cadenceError}</p>}
-              <p className="text-xs text-muted-foreground">We’ll tailor the next step based on this.</p>
+              <p className="text-xs text-muted-foreground">We'll tailor the next step based on this.</p>
             </div>
           );
         case 'publishSchedule':
@@ -519,7 +520,7 @@ export default function Onboarding() {
                   </div>
                 );
               })}
-              <p className="text-xs text-muted-foreground">Pick your first publishing day(s); we’ll take it from there.</p>
+              <p className="text-xs text-muted-foreground">Pick your first publishing day(s); we'll take it from there.</p>
             </div>
           );
         case 'finish':
@@ -527,7 +528,7 @@ export default function Onboarding() {
             <div className="space-y-2">
               <h3 className="text-lg font-semibold">Finish</h3>
               <p className="text-sm text-muted-foreground">Nice work. You can publish now or explore your dashboard.</p>
-              {saving && <div className="text-xs text-muted-foreground">Working…</div>}
+              {saving && <div className="text-xs text-muted-foreground">Working...</div>}
             </div>
           );
         // Import flow renders
@@ -543,17 +544,17 @@ export default function Onboarding() {
         case 'confirm':
           return (
             <div className="space-y-3">
-              <p className="text-sm">We’ll import episodes and assets from:</p>
-              <div className="p-3 rounded border bg-accent/30 text-sm break-all">{rssUrl || '—'}</div>
+              <p className="text-sm">We'll import episodes and assets from:</p>
+              <div className="p-3 rounded border bg-accent/30 text-sm break-all">{rssUrl || '-'}</div>
               <p className="text-xs text-muted-foreground">Click Continue to start the import.</p>
             </div>
           );
         case 'importing':
-          return (<div className="text-sm">Importing… This may take a moment.</div>);
+          return (<div className="text-sm">Importing... This may take a moment.</div>);
         case 'analyze':
-          return (<div className="text-sm">Analyzing your feed and extracting settings…</div>);
+          return (<div className="text-sm">Analyzing your feed and extracting settings...</div>);
         case 'assets':
-          return (<div className="text-sm">Pulling cover art and audio assets…</div>);
+          return (<div className="text-sm">Pulling cover art and audio assets...</div>);
         case 'importSuccess':
           return (
             <div className="space-y-2">

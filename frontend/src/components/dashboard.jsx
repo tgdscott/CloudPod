@@ -383,6 +383,13 @@ export default function PodcastPlusDashboard() {
                       <div>
                         <div className="text-[11px] tracking-wide text-gray-500">Ready?</div>
                         <div className={`font-semibold mt-0.5 ${canCreateEpisode ? 'text-green-600' : 'text-amber-600'}`}>{canCreateEpisode ? 'Yes' : 'Setup needed'}</div>
+                        {!canCreateEpisode && (
+                          <div className="text-[11px] text-amber-600 max-w-[12rem]">
+                            {podcasts.length === 0 && templates.length === 0 && 'Add a show and create a template to unlock the episode builder.'}
+                            {podcasts.length === 0 && templates.length > 0 && 'Add a show to unlock the episode builder.'}
+                            {podcasts.length > 0 && templates.length === 0 && 'Create a template to unlock the episode builder.'}
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
@@ -391,15 +398,17 @@ export default function PodcastPlusDashboard() {
                           <Plus className="w-4 h-4 mr-2" />New Episode
                         </Button>
                       ) : (
-                        <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
-                          {podcasts.length === 0 && <span>Add a show. </span>}
-                          {templates.length === 0 && <span>Create a template.</span>}
-                        </div>
-                      )}
-                      {!canCreateEpisode && (
-                        <div className="flex gap-2">
-                          {podcasts.length === 0 && <Button variant="outline" size="sm" onClick={() => setCurrentView('podcastManager')}>Add show</Button>}
-                          {templates.length === 0 && <Button variant="outline" size="sm" onClick={() => setCurrentView('templateManager')}>Add template</Button>}
+                        <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2 space-y-1">
+                          <span className="font-medium text-amber-800">Finish setup to start publishing.</span>
+                          <span>
+                            {podcasts.length === 0 && templates.length === 0 && 'Add a show and create a template to unlock the episode builder.'}
+                            {podcasts.length === 0 && templates.length > 0 && 'Add a show to unlock the episode builder.'}
+                            {podcasts.length > 0 && templates.length === 0 && 'Create a template to unlock the episode builder.'}
+                          </span>
+                          <div className="flex gap-2 flex-wrap">
+                            {podcasts.length === 0 && <Button variant="outline" size="sm" onClick={() => setCurrentView('podcastManager')}>Add show</Button>}
+                            {templates.length === 0 && <Button variant="outline" size="sm" onClick={() => setCurrentView('templateManager')}>Create template</Button>}
+                          </div>
                         </div>
                       )}
                     </div>

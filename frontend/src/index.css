@@ -107,6 +107,46 @@
   /* NSC links and accents clearly teal */
   html.brand-nsc a { color: hsl(var(--primary)); }
   html.brand-nsc a:hover { opacity: .9; }
+  html.pref-large-text {
+    font-size: 18px;
+  }
+  html.pref-large-text body {
+    font-size: 1.1rem;
+    line-height: 1.65;
+  }
+  html.pref-high-contrast {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 0%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 0%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 0%;
+    --primary: 220 100% 30%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 90%;
+    --secondary-foreground: 0 0% 0%;
+    --muted: 0 0% 88%;
+    --muted-foreground: 0 0% 15%;
+    --accent: 220 100% 40%;
+    --accent-foreground: 0 0% 100%;
+    --border: 0 0% 25%;
+    --input: 0 0% 25%;
+    --ring: 220 100% 30%;
+  }
+  html.pref-high-contrast body, body.pref-high-contrast {
+    background-color: #ffffff;
+    color: #000000;
+  }
+  html.pref-high-contrast a {
+    text-decoration: underline;
+  }
+  html.pref-high-contrast *:focus-visible {
+    outline-color: hsl(var(--ring));
+    outline-width: 3px;
+    outline-style: solid;
+    outline-offset: 2px;
+  }
+
 }
 
 @layer base {
@@ -116,4 +156,87 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Legal content layout */
+.legal-content {
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 1rem;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
+  padding: clamp(1.75rem, 2vw + 1.25rem, 3rem);
+  font-size: 1rem;
+  line-height: 1.75;
+  color: #1f2937;
+}
+
+.legal-content h1 {
+  font-size: clamp(2rem, 2.4rem, 2.75rem);
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 1rem;
+}
+
+.legal-content h2 {
+  margin-top: 2.5rem;
+  margin-bottom: 1rem;
+  font-size: clamp(1.4rem, 1.6rem, 1.8rem);
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.legal-content h3 {
+  margin-top: 1.75rem;
+  margin-bottom: 0.75rem;
+  font-size: clamp(1.2rem, 1.3rem, 1.4rem);
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.legal-content p {
+  margin-bottom: 1rem;
+}
+
+.legal-content ul,
+.legal-content ol {
+  margin-bottom: 1rem;
+  padding-left: 1.5rem;
+}
+
+.legal-content ul {
+  list-style: disc;
+}
+
+.legal-content ol {
+  list-style: decimal;
+}
+
+.legal-content li {
+  margin-bottom: 0.5rem;
+}
+
+.legal-content blockquote {
+  margin: 1.75rem 0;
+  padding-left: 1.25rem;
+  border-left: 4px solid #3b82f6;
+  background-color: #f8fafc;
+  border-radius: 0.5rem;
+  color: #1f2937;
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+}
+
+.legal-content hr {
+  margin: 2.5rem 0;
+  border: 0;
+  border-top: 1px solid #e2e8f0;
+}
+
+.legal-content a {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+.legal-content strong {
+  font-weight: 600;
 }

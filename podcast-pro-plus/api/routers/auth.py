@@ -53,6 +53,17 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
 
+
+def _to_user_public(user: User) -> UserPublic:
+    data = user.model_dump()
+    admin_email = getattr(settings, "ADMIN_EMAIL", "") or ""
+    is_admin = bool(admin_email and user.email and user.email.lower() == admin_email.lower())
+    data.update({
+        "is_admin": is_admin or bool(getattr(user, "is_admin", False)),
+        "terms_version_required": settings.TERMS_VERSION,
+    })
+    return UserPublic(**data)
+
 # --- Dependency for getting current user ---
 async def get_current_user(
     request: Request, session: Session = Depends(get_session), token: str = Depends(oauth2_scheme)
@@ -77,29 +88,49 @@ async def get_current_user(
     return user
 
 # --- Standard Authentication Endpoints ---
+
+
+class UserRegisterPayload(UserCreate):
+    accept_terms: bool
+    terms_version: str
+
 @router.post("/register", response_model=UserPublic, status_code=status.HTTP_201_CREATED)
-async def register_user(user_in: UserCreate, session: Session = Depends(get_session)):
+async def register_user(user_in: UserRegisterPayload, request: Request, session: Session = Depends(get_session)):
     """Register a new user with email and password."""
+    if not user_in.accept_terms:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You must accept the terms of use to create an account.")
+    if user_in.terms_version != settings.TERMS_VERSION:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Terms version mismatch. Please refresh and try again.")
+
     db_user = crud.get_user_by_email(session=session, email=user_in.email)
     if db_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="A user with this email already exists.",
         )
-    # Apply admin default activation toggle
+
     try:
         admin_settings = load_admin_settings(session)
-        user_in.is_active = bool(getattr(admin_settings, 'default_user_active', True))
+        default_active = bool(getattr(admin_settings, 'default_user_active', True))
     except Exception:
-        user_in.is_active = True
-    user = crud.create_user(session=session, user_create=user_in)
+        default_active = True
+
+    base_user = UserCreate(**user_in.model_dump(exclude={"accept_terms", "terms_version"}))
+    base_user.is_active = default_active
+
+    user = crud.create_user(session=session, user_create=base_user)
     admin_email = getattr(settings, 'ADMIN_EMAIL', '')
     if admin_email and user.email and user.email.lower() == admin_email.lower():
         user.is_admin = True
         session.add(user)
         session.commit()
         session.refresh(user)
-    return user
+
+    ip = request.client.host if request.client else None
+    user_agent = request.headers.get('user-agent')
+    crud.record_terms_acceptance(session=session, user=user, version=user_in.terms_version, ip=ip, user_agent=user_agent)
+    session.refresh(user)
+    return _to_user_public(user)
 
 @router.post("/token")
 async def login_for_access_token(
@@ -132,6 +163,37 @@ class LoginRequest(BaseModel):
     email: EmailStr
     password: str
 
+
+
+
+class TermsAcceptancePayload(BaseModel):
+    version: str
+
+
+@router.get("/terms/info", response_model=dict)
+async def get_terms_info():
+    """Expose the current terms version and canonical URL."""
+    return {
+        "version": settings.TERMS_VERSION,
+        "url": settings.TERMS_URL,
+    }
+
+
+@router.post("/terms/accept", response_model=UserPublic)
+async def accept_terms(
+    payload: TermsAcceptancePayload,
+    request: Request,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> UserPublic:
+    if payload.version != settings.TERMS_VERSION:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Terms version mismatch. Reload and try again.")
+
+    ip = request.client.host if request.client else None
+    user_agent = request.headers.get('user-agent')
+    crud.record_terms_acceptance(session=session, user=current_user, version=payload.version, ip=ip, user_agent=user_agent)
+    session.refresh(current_user)
+    return _to_user_public(current_user)
 
 @router.post("/login", response_model=dict)
 async def login_for_access_token_json(
@@ -184,7 +246,7 @@ async def patch_user_prefs(payload: UserPrefsPatch, session: Session = Depends(g
         session.add(current_user)
         session.commit()
         session.refresh(current_user)
-    return current_user
+    return _to_user_public(current_user)
 
 # --- Google OAuth Endpoints ---
 @router.get('/login/google')
@@ -253,11 +315,7 @@ async def auth_google_callback(request: Request, session: Session = Depends(get_
 @router.get("/users/me", response_model=UserPublic)
 async def read_users_me(current_user: User = Depends(get_current_user)):
     """Gets the details of the currently logged-in user."""
-    data = current_user.model_dump()
-    admin_email = getattr(settings, 'ADMIN_EMAIL', '')
-    is_admin = bool(admin_email and current_user.email and current_user.email.lower() == admin_email.lower())
-    data.update({"is_admin": is_admin})
-    return UserPublic(**data)
+    return _to_user_public(current_user)
 
 # --- Debug endpoint ---
 @router.get("/debug/google-client", include_in_schema=False)

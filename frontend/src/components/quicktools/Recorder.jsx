@@ -753,6 +753,9 @@ export default function Recorder({ onBack, token, onFinish, onSaved }) {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end max-w-3xl mx-auto w-full">
             <div className="md:col-span-2">
               <Label htmlFor="micSelect">Microphone</Label>
+              {devices.filter(d => d.deviceId).length === 0 && (
+                <p className="text-xs text-muted-foreground mt-1">Select your microphone and click Allow in your browser when prompted. The list stays disabled until access is granted.</p>
+              )}
               <Select value={selectedDeviceId} onValueChange={onChangeDevice} onOpenChange={(open)=>{ if(open && devices.filter(d=>d.deviceId).length===0) ensurePermissionAndDevices().catch(()=>{}); }} aria-label="Select microphone">
                 <SelectTrigger id="micSelect" className="mt-1 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary">
                   <SelectValue placeholder={devices.filter(d=>d.deviceId).length? 'Select microphone' : 'Select microphone (allow access first)'} />

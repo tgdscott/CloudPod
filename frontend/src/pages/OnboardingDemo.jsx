@@ -1,10 +1,10 @@
 import React, { useState } from "react";
 import OnboardingWrapper from "@/components/onboarding/OnboardingWrapper.jsx";
-import { useComfortPrefs } from "@/hooks/useComfortPrefs";
+import { useComfort } from '@/ComfortContext.jsx';
 
 export default function OnboardingDemo() {
   const [index, setIndex] = useState(0);
-  const { largeText, setLargeText, highContrast, setHighContrast } = useComfortPrefs();
+  const { largeText, setLargeText, highContrast, setHighContrast } = useComfort();
   const steps = [
     {
       id: "welcome",
@@ -25,7 +25,7 @@ export default function OnboardingDemo() {
     {
       id: "publish",
       title: "Choose a publish day",
-      description: "We’ll remind you before each release.",
+      description: "We'll remind you before each release.",
       render: () => <div className="space-x-2"><button className="btn">Mon</button><button className="btn">Wed</button><button className="btn">Fri</button></div>,
       validate: () => true,
       tip: "Consistency beats volume.",

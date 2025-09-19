@@ -18,8 +18,9 @@ import {
   Music,
   Bot,
   Settings2,
+  HelpCircle,
 } from "lucide-react";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { makeApi } from "@/lib/apiClient";
 import { createTTS } from "@/api/media";
 import { toast } from "@/hooks/use-toast";
@@ -71,6 +72,8 @@ export default function TemplateEditor({ templateId, onBack, token, onTemplateSa
   const [error, setError] = useState(null);
   const [mediaFiles, setMediaFiles] = useState([]);
     const [podcasts, setPodcasts] = useState([]);
+    const [baselineTemplate, setBaselineTemplate] = useState(null);
+    const skipExitPromptRef = useRef(false);
     // Default AI voice for TTS (template-level)
     const [voiceId, setVoiceId] = useState(null);
     const [showVoicePicker, setShowVoicePicker] = useState(false);
@@ -85,6 +88,7 @@ export default function TemplateEditor({ templateId, onBack, token, onTemplateSa
     const [ttsVoices, setTtsVoices] = useState([]);
     const [ttsLoading, setTtsLoading] = useState(false);
     const [createdFromTTS, setCreatedFromTTS] = useState({}); // { segmentId: true }
+    const [showAdvanced, setShowAdvanced] = useState(false);
 
         // Load voices when TTS modal opens
         useEffect(() => {
@@ -109,6 +113,37 @@ export default function TemplateEditor({ templateId, onBack, token, onTemplateSa
         }, [ttsOpen]);
   const isNewTemplate = templateId === 'new';
 
+  const isDirty = useMemo(() => {
+    if (!template || !baselineTemplate) return false;
+    try {
+      return JSON.stringify(template) !== JSON.stringify(baselineTemplate);
+    } catch {
+      return true;
+    }
+  }, [template, baselineTemplate]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!isDirty) return;
+    const handler = (event) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [isDirty]);
+
+  useEffect(() => {
+    if (!template) return;
+    setBaselineTemplate((prev) => {
+      if (prev) return prev;
+      try {
+        return JSON.parse(JSON.stringify(template));
+      } catch {
+        return prev;
+      }
+    });
+  }, [template]);
   // --- Memoized lists for filtered media files ---
     const introFiles = useMemo(() => mediaFiles.filter(mf => mf.category === 'intro'), [mediaFiles]);
   const outroFiles = useMemo(() => mediaFiles.filter(mf => mf.category === 'outro'), [mediaFiles]);
@@ -118,6 +153,7 @@ export default function TemplateEditor({ templateId, onBack, token, onTemplateSa
   // --- Data Fetching ---
   useEffect(() => {
     const fetchInitialData = async () => {
+      setBaselineTemplate(null);
       setIsLoading(true);
       try {
                 // Fetch media + podcasts in parallel via centralized API client
@@ -156,6 +192,15 @@ export default function TemplateEditor({ templateId, onBack, token, onTemplateSa
     };
     fetchInitialData();
   }, [templateId, token, isNewTemplate]);
+  useEffect(() => {
+    if (!template || showAdvanced) return;
+    const hasAdvanced = Boolean(
+      (Array.isArray(template.background_music_rules) && template.background_music_rules.length > 0) ||
+      (template.timing && ((template.timing.content_start_offset_s || 0) !== 0 || (template.timing.outro_start_offset_s || 0) !== 0)) ||
+      (template.ai_settings && Object.keys(template.ai_settings).length > 0)
+    );
+    if (hasAdvanced) setShowAdvanced(true);
+  }, [template, showAdvanced]);
 
     // Seed local voiceId from template defaults when template changes
     useEffect(() => {
@@ -211,6 +256,21 @@ export default function TemplateEditor({ templateId, onBack, token, onTemplateSa
     const newRules = [...template.background_music_rules];
     newRules.splice(index, 1);
     setTemplate(prev => ({ ...prev, background_music_rules: newRules }));
+  };
+
+  const handleBackClick = () => {
+    if (skipExitPromptRef.current) {
+      skipExitPromptRef.current = false;
+      if (onBack) onBack();
+      return;
+    }
+    if (isDirty && typeof window !== 'undefined') {
+      const confirmLeave = window.confirm('Leave the template editor without saving changes?');
+      if (!confirmLeave) {
+        return;
+      }
+    }
+    if (onBack) onBack();
   };
 
     const handleSourceChange = (segmentId, source) => {
@@ -272,57 +332,57 @@ export default function TemplateEditor({ templateId, onBack, token, onTemplateSa
     setTemplate(prev => ({ ...prev, segments: items }));
   };
 
-    const handleSave = async () => {
+  const handleSave = async () => {
+    if (!template) return;
     setIsSaving(true);
     setError(null);
-        try {
-                        if (!template.podcast_id) {
-                                throw new Error('A show is required for this template. Please select one.');
-                        }
-            const api = makeApi(token);
-            // Sanitize segments to ensure intros/outros (and non-content) persist only static filenames
-            const payload = { ...template };
-            // Persist template-level default voice if set
-            if (voiceId) {
-                payload.default_elevenlabs_voice_id = voiceId;
-            } else {
-                // Explicitly clear when not set
-                payload.default_elevenlabs_voice_id = null;
+    try {
+      if (!template.podcast_id) {
+        throw new Error('A show is required for this template. Please select one.');
+      }
+      const api = makeApi(token);
+      const payload = { ...template };
+      if (voiceId) {
+        payload.default_elevenlabs_voice_id = voiceId;
+      } else {
+        payload.default_elevenlabs_voice_id = null;
+      }
+      if (Array.isArray(payload.segments)) {
+        payload.segments = payload.segments.map(seg => {
+          if (seg.segment_type !== 'content') {
+            const st = seg?.source?.source_type;
+            if (st === 'static') {
+              const filename = seg?.source?.filename || '';
+              return { ...seg, source: { source_type: 'static', filename } };
             }
-            if (Array.isArray(payload.segments)) {
-                payload.segments = payload.segments.map(seg => {
-                    // Allow non-content segments to be either static audio file or per-episode TTS
-                    if (seg.segment_type !== 'content') {
-                        const st = seg?.source?.source_type;
-                        if (st === 'static') {
-                            const filename = seg?.source?.filename || '';
-                            return { ...seg, source: { source_type: 'static', filename } };
-                        }
-                        if (st === 'tts') {
-                            // Persist minimal fields for per-episode TTS prompts
-                            const text_prompt = (seg?.source?.text_prompt || '').trim();
-                            const voice_id = seg?.source?.voice_id || undefined;
-                            const nextSource = { source_type: 'tts' };
-                            if (text_prompt) nextSource.text_prompt = text_prompt;
-                            if (voice_id) nextSource.voice_id = voice_id;
-                            return { ...seg, source: nextSource };
-                        }
-                        // Fallback to static with empty filename
-                        return { ...seg, source: { source_type: 'static', filename: seg?.source?.filename || '' } };
-                    }
-                    // Content block is a structural placeholder; force to static with empty filename
-                    return { ...seg, source: { source_type: 'static', filename: '' } };
-                });
+            if (st === 'tts') {
+              const text_prompt = (seg?.source?.text_prompt || '').trim();
+              const voice_id = seg?.source?.voice_id || undefined;
+              const nextSource = { source_type: 'tts' };
+              if (text_prompt) nextSource.text_prompt = text_prompt;
+              if (voice_id) nextSource.voice_id = voice_id;
+              return { ...seg, source: nextSource };
             }
-            if (isNewTemplate) {
-                await api.post('/api/templates/', payload);
-            } else {
-                await api.put(`/api/templates/${templateId}`, payload);
-            }
-      onTemplateSaved();
-      onBack();
-    } catch(err) {
-            setError(err.message || String(err));
+            return { ...seg, source: { source_type: 'static', filename: seg?.source?.filename || '' } };
+          }
+          return { ...seg, source: { source_type: 'static', filename: '' } };
+        });
+      }
+      if (isNewTemplate) {
+        await api.post('/api/templates/', payload);
+      } else {
+        await api.put(`/api/templates/${templateId}`, payload);
+      }
+      try {
+        setBaselineTemplate(JSON.parse(JSON.stringify(template)));
+      } catch {
+        /* ignore snapshot errors */
+      }
+      skipExitPromptRef.current = true;
+      if (onTemplateSaved) onTemplateSaved();
+      handleBackClick();
+    } catch (err) {
+      setError(err.message || String(err));
     } finally {
       setIsSaving(false);
     }
@@ -338,11 +398,14 @@ export default function TemplateEditor({ templateId, onBack, token, onTemplateSa
   return (
     <div className="p-6 bg-gray-50 min-h-screen space-y-6">
         <div className="flex justify-between items-center">
-            <Button onClick={onBack} variant="ghost" className="text-gray-700"><ArrowLeft className="w-4 h-4 mr-2" />Back</Button>
+            <Button onClick={handleBackClick} variant="ghost" className="text-gray-700"><ArrowLeft className="w-4 h-4 mr-2" />Back</Button>
             <h1 className="text-2xl font-bold text-gray-800">Template Editor</h1>
+            <div className="flex items-center gap-3">
+            {isDirty && !isSaving && <span className="text-xs text-amber-600 font-medium">Unsaved changes</span>}
             <Button onClick={handleSave} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700 text-white">
-                {isSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : <><Save className="w-4 h-4 mr-2" />Save Template</> }
+                {isSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : <><Save className="w-4 h-4 mr-2" />Save Template</>}
             </Button>
+            </div>
         </div>
 
                 <Card className="shadow-sm">
@@ -389,7 +452,7 @@ export default function TemplateEditor({ templateId, onBack, token, onTemplateSa
                     <CardContent className="p-6">
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                             <div>
-                                <Label className="text-sm font-medium text-gray-600">Default AI Voice</Label>
+                                <Label className="text-sm font-medium text-gray-600 flex items-center gap-1">Default AI Voice<HelpCircle className="h-4 w-4 text-muted-foreground" aria-hidden="true" title="Set a default voice for template TTS prompts." /></Label>
                                 <div className="text-sm text-gray-800 mt-1">{voiceName || 'Not set'}</div>
                             </div>
                             <div className="mt-2 sm:mt-0">
@@ -450,69 +513,124 @@ export default function TemplateEditor({ templateId, onBack, token, onTemplateSa
             </DragDropContext>
         </CardContent></Card>
 
-        <Card><CardHeader><CardTitle className="flex items-center gap-2"><Settings2 className="w-6 h-6 text-gray-600"/> Advanced Settings</CardTitle><CardDescription>Fine-tune the timing and background music for your podcast.</CardDescription></CardHeader><CardContent className="space-y-6 pt-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                    <Label>Content Start Delay (seconds)</Label>
-                    <Input type="number" step="0.5" value={template.timing?.content_start_offset_s} onChange={(e) => handleTimingChange('content_start_offset_s', parseFloat(e.target.value || 0))} />
-                    <p className="text-xs text-gray-500 mt-1">Delay / overlap (negative overlaps intro). Default 0.</p>
-                </div>
-                <div>
-                    <Label>Outro Start Delay (seconds)</Label>
-                    <Input type="number" step="0.5" value={template.timing?.outro_start_offset_s} onChange={(e) => handleTimingChange('outro_start_offset_s', parseFloat(e.target.value || 0))} />
-                    <p className="text-xs text-gray-500 mt-1">Delay / overlap (negative overlaps content tail). Default 0.</p>
-                </div>
-            </div>
-            <div><h4 className="text-lg font-semibold mb-2">Background Music</h4><div className="space-y-4">
-                {(template.background_music_rules || []).map((rule, index) => (
-                    <div key={rule.id} className="p-4 border rounded-lg bg-gray-50 space-y-4">
-                        <div className="flex justify-between items-center">
-                            <Label className="font-semibold">Music Rule #{index + 1}</Label>
-                            <Button variant="destructive" size="sm" onClick={() => removeBackgroundMusicRule(index)}><Trash2 className="w-4 h-4 mr-2"/>Remove</Button>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div><Label>Apply to Section</Label><Select value={rule.apply_to_segments[0]} onValueChange={(v) => handleBackgroundMusicChange(index, 'apply_to_segments', [v])}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>
-                                <SelectItem value="intro">Intro Section</SelectItem>
-                                <SelectItem value="content">Content Section</SelectItem>
-                                <SelectItem value="outro">Outro Section</SelectItem>
-                            </SelectContent></Select></div>
-                            <div><Label>Music File</Label><Select value={rule.music_filename} onValueChange={(v) => handleBackgroundMusicChange(index, 'music_filename', v)}><SelectTrigger><SelectValue placeholder="Select music..." /></SelectTrigger><SelectContent>{musicFiles.map(f => <SelectItem key={f.id} value={f.filename}>{f.friendly_name || f.filename.split('_').slice(1).join('_')}</SelectItem>)}</SelectContent></Select></div>
-                        </div>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <div><Label>Start Offset (sec)</Label><Input type="number" step="0.5" value={rule.start_offset_s} onChange={(e) => handleBackgroundMusicChange(index, 'start_offset_s', parseFloat(e.target.value || 0))} /></div>
-                            <div><Label>End Offset (sec)</Label><Input type="number" step="0.5" value={rule.end_offset_s} onChange={(e) => handleBackgroundMusicChange(index, 'end_offset_s', parseFloat(e.target.value || 0))} /></div>
-                            <div><Label>Fade In (sec)</Label><Input type="number" step="0.5" value={rule.fade_in_s} onChange={(e) => handleBackgroundMusicChange(index, 'fade_in_s', parseFloat(e.target.value || 0))} /></div>
-                            <div><Label>Fade Out (sec)</Label><Input type="number" step="0.5" value={rule.fade_out_s} onChange={(e) => handleBackgroundMusicChange(index, 'fade_out_s', parseFloat(e.target.value || 0))} /></div>
-                        </div>
-                        <div className="mt-4">
-                            <Label>Volume (dB)</Label>
-                            <div className="flex items-center gap-2">
-                                <Input 
-                                    type="range" 
-                                    min="-60" 
-                                    max="0" 
-                                    step="1" 
-                                    value={rule.volume_db} 
-                                    onChange={(e) => handleBackgroundMusicChange(index, 'volume_db', parseInt(e.target.value, 10))} 
-                                    className="w-full"
-                                />
-                                <span className="text-sm font-mono w-16 text-center">{rule.volume_db} dB</span>
+        <div className="flex items-center justify-between pt-2">
+            <h2 className="text-lg font-semibold">Advanced options</h2>
+            <Button variant="outline" size="sm" onClick={() => setShowAdvanced((prev) => !prev)}>
+                {showAdvanced ? 'Hide advanced' : 'Show advanced'}
+            </Button>
+        </div>
+        {showAdvanced && (
+            <>
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2"><Settings2 className="w-6 h-6 text-gray-600" /> Advanced Settings</CardTitle>
+                        <CardDescription>Fine-tune the timing and background music for your podcast.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-6 pt-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <Label className="flex items-center gap-1">
+                                    Content Start Delay (seconds)
+                                    <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" title="Delay before main content begins after intro. Use negatives to overlap." />
+                                </Label>
+                                <Input type="number" step="0.5" value={template.timing?.content_start_offset_s} onChange={(e) => handleTimingChange('content_start_offset_s', parseFloat(e.target.value || 0))} />
+                                <p className="text-xs text-gray-500 mt-1">Delay / overlap (negative overlaps intro). Default 0.</p>
+                            </div>
+                            <div>
+                                <Label className="flex items-center gap-1">
+                                    Outro Start Delay (seconds)
+                                    <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" title="Delay before the outro begins. Use negatives to overlap." />
+                                </Label>
+                                <Input type="number" step="0.5" value={template.timing?.outro_start_offset_s} onChange={(e) => handleTimingChange('outro_start_offset_s', parseFloat(e.target.value || 0))} />
+                                <p className="text-xs text-gray-500 mt-1">Delay / overlap (negative overlaps content tail). Default 0.</p>
                             </div>
                         </div>
-                    </div>
-                ))}
-            </div><Button onClick={addBackgroundMusicRule} variant="outline" className="mt-4"><Plus className="w-4 h-4 mr-2"/>Add Music Rule</Button></div>
-                </CardContent></Card>
+                        <div>
+                            <h4 className="text-lg font-semibold mb-2 flex items-center gap-1">
+                                Background Music
+                                <HelpCircle className="h-4 w-4 text-muted-foreground" aria-hidden="true" title="Apply looping music or stingers to specific sections." />
+                            </h4>
+                            <div className="space-y-4">
+                                {(template.background_music_rules || []).map((rule, index) => (
+                                    <div key={rule.id} className="p-4 border rounded-lg bg-gray-50 space-y-4">
+                                        <div className="flex justify-between items-center">
+                                            <Label className="font-semibold">Music Rule #{index + 1}</Label>
+                                            <Button variant="destructive" size="sm" onClick={() => removeBackgroundMusicRule(index)}>
+                                                <Trash2 className="w-4 h-4 mr-2" />Remove
+                                            </Button>
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div>
+                                                <Label>Apply to Section</Label>
+                                                <Select value={rule.apply_to_segments[0]} onValueChange={(v) => handleBackgroundMusicChange(index, 'apply_to_segments', [v])}>
+                                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="intro">Intro Section</SelectItem>
+                                                        <SelectItem value="content">Content Section</SelectItem>
+                                                        <SelectItem value="outro">Outro Section</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div>
+                                                <Label>Music File</Label>
+                                                <Select value={rule.music_filename} onValueChange={(v) => handleBackgroundMusicChange(index, 'music_filename', v)}>
+                                                    <SelectTrigger><SelectValue placeholder="Select music..." /></SelectTrigger>
+                                                    <SelectContent>{musicFiles.map(f => <SelectItem key={f.id} value={f.filename}>{f.friendly_name || f.filename.split('_').slice(1).join('_')}</SelectItem>)}</SelectContent>
+                                                </Select>
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                            <div>
+                                                <Label>Start Offset (sec)</Label>
+                                                <Input type="number" step="0.5" value={rule.start_offset_s} onChange={(e) => handleBackgroundMusicChange(index, 'start_offset_s', parseFloat(e.target.value || 0))} />
+                                            </div>
+                                            <div>
+                                                <Label>End Offset (sec)</Label>
+                                                <Input type="number" step="0.5" value={rule.end_offset_s} onChange={(e) => handleBackgroundMusicChange(index, 'end_offset_s', parseFloat(e.target.value || 0))} />
+                                            </div>
+                                            <div>
+                                                <Label>Fade In (sec)</Label>
+                                                <Input type="number" step="0.5" value={rule.fade_in_s} onChange={(e) => handleBackgroundMusicChange(index, 'fade_in_s', parseFloat(e.target.value || 0))} />
+                                            </div>
+                                            <div>
+                                                <Label>Fade Out (sec)</Label>
+                                                <Input type="number" step="0.5" value={rule.fade_out_s} onChange={(e) => handleBackgroundMusicChange(index, 'fade_out_s', parseFloat(e.target.value || 0))} />
+                                            </div>
+                                        </div>
+                                        <div className="mt-4">
+                                            <Label>Volume (dB)</Label>
+                                            <div className="flex items-center gap-2">
+                                                <Input
+                                                    type="range"
+                                                    min="-60"
+                                                    max="0"
+                                                    step="1"
+                                                    value={rule.volume_db}
+                                                    onChange={(e) => handleBackgroundMusicChange(index, 'volume_db', parseInt(e.target.value, 10))}
+                                                    className="w-full"
+                                                />
+                                                <span className="text-sm font-mono w-16 text-center">{rule.volume_db} dB</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            <Button onClick={addBackgroundMusicRule} variant="outline" className="mt-4">
+                                <Plus className="w-4 h-4 mr-2" />Add Music Rule
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
 
-                {/* --- AI Content (added) --- */}
                 <TemplateAIContent
                     value={(template?.ai_settings) || AI_DEFAULT}
                     onChange={(next) => setTemplate(prev => ({ ...prev, ai_settings: next }))}
                 />
-
+            </>
+        )}
                 <div className="flex justify-end items-center mt-6">
             <Button onClick={handleSave} disabled={isSaving || !template.podcast_id || podcasts.length === 0} className="bg-blue-600 hover:bg-blue-700 text-white">
-                {isSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : <><Save className="w-4 h-4 mr-2" />Save Template</> }
+                {isSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : <><Save className="w-4 h-4 mr-2" />Save Template</>}
             </Button>
         </div>
                         {showVoicePicker && (
@@ -696,7 +814,7 @@ const SegmentEditor = ({ segment, onDelete, onSourceChange, mediaFiles, isDraggi
                     {segment?.source?.source_type === 'static' && isMissing && (
                         <span
                             className="ml-2 text-xs px-2 py-0.5 rounded-full bg-yellow-50 text-yellow-800 border border-yellow-200"
-                            title={likelyStale ? 'This looks like a temporary file id. Please relink.' : 'The referenced audio file could not be found. Relink to fix.'}
+                            title={likelyStale ? 'This looks like a temporary file id. Choose another audio file.' : 'The referenced audio file could not be found. Select an audio file to reconnect it.'}
                         >
                             Missing audio file
                         </span>
@@ -728,7 +846,7 @@ const SegmentEditor = ({ segment, onDelete, onSourceChange, mediaFiles, isDraggi
                     </div>
                 )}
                 <div>
-                    <Label className="text-sm font-medium text-gray-600">Audio Source</Label>
+                    <Label className="text-sm font-medium text-gray-600 flex items-center gap-1">Audio Source<HelpCircle className="h-4 w-4 text-muted-foreground" aria-hidden="true" title="Choose between existing audio files or per-episode TTS prompts." /></Label>
                     <div className="flex items-center gap-3 mt-1">
                         <div className="flex-1">
                             <Select value={segment?.source?.source_type || 'static'} onValueChange={(v) => handleSourceChangeLocal('source_type', v)}>
@@ -743,7 +861,7 @@ const SegmentEditor = ({ segment, onDelete, onSourceChange, mediaFiles, isDraggi
                         </div>
                         <Button type="button" variant="outline" onClick={() => onOpenTTS()}><Mic className="w-4 h-4 mr-2" />Create with TTS (one-time)</Button>
                         {segment?.source?.source_type === 'static' && isMissing && (
-                            <Button type="button" variant="secondary" size="sm" onClick={() => { setRelinkChoice(filename || ''); setRelinkOpen(true); }}>Relink</Button>
+                            <Button type="button" variant="secondary" size="sm" title="Select an existing audio file for this segment" onClick={() => { setRelinkChoice(filename || ''); setRelinkOpen(true); }}>Choose audio</Button>
                         )}
                     </div>
                 </div>
@@ -795,13 +913,13 @@ const SegmentEditor = ({ segment, onDelete, onSourceChange, mediaFiles, isDraggi
                 </div>
             </CardContent>
 
-            {/* Relink Dialog */}
+            {/* Reconnect audio dialog */}
             <Dialog open={relinkOpen} onOpenChange={setRelinkOpen}>
                 <DialogContent className="sm:max-w-[520px]">
                     <DialogHeader>
-                        <DialogTitle>Relink audio file</DialogTitle>
+                        <DialogTitle>Reconnect audio file</DialogTitle>
                         <DialogDescription>
-                            Choose an existing audio item to replace the missing reference.
+                            Pick an existing audio item to reconnect this segment.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-3 py-2">
@@ -833,7 +951,7 @@ const SegmentEditor = ({ segment, onDelete, onSourceChange, mediaFiles, isDraggi
                                 onSourceChange(segment.id, { source_type: 'static', filename: relinkChoice });
                                 setRelinkOpen(false);
                             }}
-                        >Save</Button>
+                        >Use audio</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

@@ -1,7 +1,18 @@
-import urllib.request, json, sys
+import json
+import os
+import sys
+import urllib.request
 
-url = 'https://podcast-api-524304361363.us-west1.run.app/api/auth/register'
-data = {'email': 'test@scottgerhardt.com', 'password': 'Test1234'}
+url = os.getenv('API_BASE', 'https://podcast-api-524304361363.us-west1.run.app') + '/api/auth/register'
+terms_version = os.getenv('TERMS_VERSION', '2025-09-19')
+
+data = {
+    'email': os.getenv('TEST_USER_EMAIL', 'test@scottgerhardt.com'),
+    'password': os.getenv('TEST_USER_PASSWORD', 'Test1234'),
+    'accept_terms': True,
+    'terms_version': terms_version,
+}
+
 req = urllib.request.Request(url, data=json.dumps(data).encode('utf-8'), headers={'Content-Type': 'application/json'})
 try:
     with urllib.request.urlopen(req, timeout=30) as resp:

@@ -2,21 +2,18 @@ import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
-import { Loader2, RefreshCw, ImageOff, Play, CheckCircle2, Clock, AlertTriangle, CalendarClock, Trash2, ArrowLeft, LayoutGrid, List as ListIcon, Search, Undo2, Scissors, Grid3X3 } from "lucide-react";
+import { Loader2, RefreshCw, ImageOff, Play, CheckCircle2, Clock, AlertTriangle, CalendarClock, Trash2, ArrowLeft, LayoutGrid, List as ListIcon, Search, Undo2, Scissors, Grid3X3, Pencil } from "lucide-react";
 import EpisodeHistoryPreview from './EpisodeHistoryPreview';
 import FlubberReview from './FlubberReview';
 import CoverCropper from './CoverCropper';
 import { makeApi, isApiError } from "@/lib/apiClient";
-
 // ------------------------------
 // Utility helpers (pure / outside component to avoid re-creation)
 // ------------------------------
 const statusLabel = (s) => String(s || '').toLowerCase();
-
 const safeJsonParse = (text) => {
   try { return text ? JSON.parse(text) : {}; } catch { return {}; }
 };
-
 const ensureIsoZ = (iso) => {
   if(!iso) return iso;
   // If already has timezone info return as-is
@@ -27,21 +24,17 @@ const ensureIsoZ = (iso) => {
   if(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(iso)) return iso+'Z';
   return iso; // fallback (let Date attempt)
 };
-
 const normalizeDate = (iso) => {
   if(!iso) return null;
   const d = new Date(ensureIsoZ(iso));
   return isNaN(d.getTime()) ? null : d;
 };
-
 const episodeSortDate = (ep) => normalizeDate(ep.publish_at) || normalizeDate(ep.processed_at) || normalizeDate(ep.created_at) || new Date(0);
-
 const isWithin24h = (iso) => {
   const d = normalizeDate(iso);
   if(!d) return false;
   return (Date.now() - d.getTime()) < 24*3600*1000;
 };
-
 const formatPublishAt = (iso) => {
   if(!iso) return '';
   try {
@@ -56,37 +49,32 @@ const formatPublishAt = (iso) => {
       if (diffMin>0) rel = diffMin<60?`in ${diffMin}m`: (diffMin<1440?`in ${Math.round(diffMin/60)}h`:`in ${Math.round(diffMin/60/24)}d`);
       else if (diffMin<0){ const m=Math.abs(diffMin); rel = m<60?`${m}m ago`:(m<1440?`${Math.round(m/60)}h ago`:`${Math.round(m/60/24)}d ago`); }
     }
-    return `${datePart} ${timePart}${rel?' · '+rel:''}`;
+    return `${datePart} ${timePart}${rel ? " - " + rel : ""}`;
   } catch { return iso; }
 };
-
 export default function EpisodeHistory({ token, onBack }) {
   // Core lists & fetch state
   const [episodes, setEpisodes] = useState([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
-
   // UI list controls
   const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'mosaic' | 'list'
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [sortKey, setSortKey] = useState('newest');
   // Preview toggle removed; mosaic view is now permanent
-
   // Editing panel
   const [editing, setEditing] = useState(null);
   const [editValues, setEditValues] = useState({ title:'', description:'', publish_state:'', tags:'', is_explicit:false, image_crop:'', cover_file:null, cover_uploading:false, season_number:null, episode_number:null });
   const [saving, setSaving] = useState(false);
   // Add state for numbering duplicates near other edit state declarations
   const [numberingConflict, setNumberingConflict] = useState(false);
-
   // Deletion & unpublish flows
   const [deletingIds, setDeletingIds] = useState(new Set());
   const [unpublishEp, setUnpublishEp] = useState(null);
   const [unpublishDoing, setUnpublishDoing] = useState(false);
   const [unpublishError, setUnpublishError] = useState("");
   const [unpublishCanForce, setUnpublishCanForce] = useState(false);
-
   const startEdit = (ep) => {
     setEditing(ep);
     setEditValues({
@@ -117,7 +105,6 @@ export default function EpisodeHistory({ token, onBack }) {
     (editValues.episode_number !== (editing.episode_number ?? null))
   );
   const cropperRef = useRef(null);
-
   // Scheduling modal state
   const [scheduleEp, setScheduleEp] = useState(null); // episode object
   const [scheduleDate, setScheduleDate] = useState(""); // YYYY-MM-DD
@@ -126,7 +113,6 @@ export default function EpisodeHistory({ token, onBack }) {
   const [scheduleError, setScheduleError] = useState("");
   // Flubber manual review state
   const [flubberEpId, setFlubberEpId] = useState(null);
-
   // One-click publish (makes episode public immediately)
   const quickPublish = async (episodeId) => {
     if(!episodeId) return;
@@ -141,7 +127,6 @@ export default function EpisodeHistory({ token, onBack }) {
       setEpisodes(prev => prev.map(e => e.id===episodeId ? { ...e, _publishing:false } : e));
     }
   };
-
   const openSchedule = (ep) => {
     setScheduleEp(ep);
     setScheduleSubmitting(false);
@@ -183,7 +168,6 @@ export default function EpisodeHistory({ token, onBack }) {
       setEpisodes(prev => prev.map(p => p.id===scheduleEp.id ? { ...p, _scheduling:false } : p));
     } finally { setScheduleSubmitting(false); }
   };
-
   const submitEdit = async () => {
     if(!editing) return;
     if(!editDirty()) { closeEdit(); return; }
@@ -199,7 +183,6 @@ export default function EpisodeHistory({ token, onBack }) {
       if(editValues.image_crop !== (editing.image_crop||'')) body.image_crop = editValues.image_crop;
       if(editValues.season_number !== (editing.season_number ?? null)) body.season_number = editValues.season_number;
       if(editValues.episode_number !== (editing.episode_number ?? null)) body.episode_number = editValues.episode_number;
-
       // Cover upload (if new file)
       let coverPath = null;
       if(editValues.cover_file){
@@ -230,7 +213,6 @@ export default function EpisodeHistory({ token, onBack }) {
         setEditValues(v=>({...v,cover_uploading:false}));
       }
       if(coverPath) body.cover_image_path = coverPath;
-
       const api = makeApi(token);
       const j = await api.patch(`/api/episodes/${editing.id}`, body);
       setEpisodes(prev => prev.map(p => p.id===editing.id ? { ...p, ...(j?.episode||{}), ...(j?.episode?{}:{
@@ -249,7 +231,6 @@ export default function EpisodeHistory({ token, onBack }) {
       alert(msg || 'Failed to save changes');
     } finally { setSaving(false); }
   };
-
   const fetchEpisodes = useCallback(async () => {
     setLoading(true); setErr("");
     const controller = new AbortController();
@@ -285,9 +266,7 @@ export default function EpisodeHistory({ token, onBack }) {
     } finally { setLoading(false); }
     return () => controller.abort();
   }, [token]);
-
   useEffect(() => { fetchEpisodes(); }, [fetchEpisodes]);
-
   // Open unpublish confirmation modal
   const openUnpublish = (ep) => {
     setUnpublishEp(ep);
@@ -295,7 +274,6 @@ export default function EpisodeHistory({ token, onBack }) {
     setUnpublishError("");
     setUnpublishCanForce(false);
   };
-
   const doUnpublish = async (force=false) => {
     if(!unpublishEp) return;
     setUnpublishDoing(true); setUnpublishError("");
@@ -312,10 +290,9 @@ export default function EpisodeHistory({ token, onBack }) {
     }
     finally { setUnpublishDoing(false); }
   };
-
   const handleDeleteEpisode = async (episodeId) => {
     if (!episodeId) return;
-  if (!window.confirm("Delete this episode permanently? This cannot be undone.\nDeleting does not return processing minutes.")) return;
+  if (!window.confirm('Delete this episode permanently? This cannot be undone.' + '\nDeleting does not return processing minutes.')) return;
     setDeletingIds(prev => new Set(prev).add(episodeId));
     try {
       const api = makeApi(token);
@@ -327,7 +304,6 @@ export default function EpisodeHistory({ token, onBack }) {
     }
     finally { setDeletingIds(prev => { const n = new Set(prev); n.delete(episodeId); return n; }); }
   };
-
   const statusChip = (s) => {
     switch(statusLabel(s)){
       case 'published': return <Badge className="bg-green-600 hover:bg-green-600"><CheckCircle2 className="w-4 h-4 mr-1"/>Published</Badge>;
@@ -338,9 +314,7 @@ export default function EpisodeHistory({ token, onBack }) {
       default: return <Badge variant="outline">{s || 'Unknown'}</Badge>;
     }
   };
-
   // Derived filtered/sorted episodes
-
   const displayEpisodes = useMemo(() => {
     let list = [...episodes];
     if (search.trim()) {
@@ -369,7 +343,6 @@ export default function EpisodeHistory({ token, onBack }) {
     }
     return list;
   }, [episodes, search, statusFilter, sortKey]);
-
   const renderGrid = () => (
     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
       {displayEpisodes.map(ep => {
@@ -410,16 +383,19 @@ export default function EpisodeHistory({ token, onBack }) {
               >
                 <Scissors className="w-4 h-4" />
               </button>
-              <button
-                className="absolute top-1 right-1 bg-white/80 hover:bg-white text-red-600 border border-red-300 rounded p-1 shadow-sm disabled:opacity-50"
+              <Button
+                variant="destructive"
+                size="sm"
+                className="absolute top-2 right-2 flex items-center gap-1 bg-white/90 text-red-600 hover:bg-white shadow-sm"
                 title="Delete episode"
                 onClick={() => handleDeleteEpisode(ep.id)}
                 disabled={deletingIds.has(ep.id)}
               >
                 {deletingIds.has(ep.id) ? <Loader2 className="w-4 h-4 animate-spin"/> : <Trash2 className="w-4 h-4"/>}
-              </button>
+                Delete
+              </Button>
               <div className="absolute bottom-1 left-1 text-[10px] text-gray-600 bg-white/70 px-1 rounded hidden group-hover:block">
-                Deleting doesn’t return minutes.
+                Deleting doesn't return minutes.
               </div>
               {ep.status === 'processed' && (
                 <div className="absolute bottom-1 right-1 flex gap-1">
@@ -441,7 +417,7 @@ export default function EpisodeHistory({ token, onBack }) {
                 <CardTitle className="text-base font-semibold leading-tight line-clamp-2" title={ep.title}>
                   {(ep.season_number!=null && ep.episode_number!=null) ? `S${ep.season_number}E${ep.episode_number} · ${ep.title || 'Untitled Episode'}` : (ep.title || 'Untitled Episode')}
                 </CardTitle>
-                <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={()=>startEdit(ep)}>Edit</Button>
+                <Button variant="secondary" size="sm" className="flex items-center gap-1" onClick={()=>startEdit(ep)}><Pencil className="w-4 h-4" />Edit</Button>
                 {typeof ep.plays_total === 'number' && (
                   <Badge variant="secondary" className="text-[11px] font-medium">{ep.plays_total} plays</Badge>
                 )}
@@ -480,7 +456,6 @@ export default function EpisodeHistory({ token, onBack }) {
       })}
     </div>
   );
-
   const renderList = () => (
     <div className="border border-gray-200 rounded-md overflow-hidden divide-y">
       <div className="grid grid-cols-12 bg-gray-50 text-[11px] uppercase tracking-wide text-gray-500 px-3 py-2 font-medium">
@@ -508,7 +483,7 @@ export default function EpisodeHistory({ token, onBack }) {
             <div className="col-span-2 text-[11px] text-gray-600">
               {ep.publish_at ? formatPublishAt(ep.publish_at, ep.publish_at_local) : '-'}
             </div>
-            <div className="col-span-2 text-[11px]">{typeof ep.plays_total === 'number' ? ep.plays_total : '—'}</div>
+            <div className="col-span-2 text-[11px]">{typeof ep.plays_total === 'number' ? ep.plays_total : '-'}</div>
             <div className="col-span-1 flex justify-end">
               {showUnpublish && (
                 <button
@@ -517,19 +492,19 @@ export default function EpisodeHistory({ token, onBack }) {
                   onClick={()=>openUnpublish(ep)}
                 >Unpublish</button>
               )}
-              <button
-                className="text-red-600 hover:text-red-800 disabled:opacity-50"
+              <Button
+                variant="destructive"
+                size="sm"
+                className="flex items-center gap-1"
                 title="Delete episode"
                 onClick={() => handleDeleteEpisode(ep.id)}
                 disabled={deletingIds.has(ep.id)}
               >
                 {deletingIds.has(ep.id) ? <Loader2 className="w-4 h-4 animate-spin"/> : <Trash2 className="w-4 h-4"/>}
-              </button>
-              <span className="ml-2 text-[10px] text-gray-500 hidden md:inline">Deleting doesn’t return minutes.</span>
-              <button
-                className="ml-2 text-blue-600 hover:text-blue-800 text-xs underline"
-                onClick={()=>startEdit(ep)}
-              >Edit</button>
+                Delete
+              </Button>
+              <span className="ml-2 text-[10px] text-gray-500 hidden md:inline">Deleting doesn't return minutes.</span>
+              <Button variant="outline" size="sm" className="ml-2 flex items-center gap-1" onClick={()=>startEdit(ep)}><Pencil className="w-4 h-4" />Edit</Button>
               {ep.status === 'processed' && (
                 <button
                   className="ml-2 text-green-600 hover:text-green-700 text-xs underline"
@@ -557,7 +532,6 @@ export default function EpisodeHistory({ token, onBack }) {
       )}
     </div>
   );
-
   // Permanent "experimental" mosaic view (uses the preview component as a dense grid)
   const renderMosaic = () => (
     <div className="rounded-lg">
@@ -569,7 +543,6 @@ export default function EpisodeHistory({ token, onBack }) {
       />
     </div>
   );
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4">
@@ -641,12 +614,9 @@ export default function EpisodeHistory({ token, onBack }) {
           {search && <span>• {displayEpisodes.length} match</span>}
         </div>
       </div>
-
-  {loading && <div className="flex items-center text-gray-600"><Loader2 className="w-5 h-5 mr-2 animate-spin"/>Loading…</div>}
+  {loading && <div className="flex items-center text-gray-600"><Loader2 className="w-5 h-5 mr-2 animate-spin"/>Loading...</div>}
   {err && <div className="text-red-600 text-sm">{err}</div>}
-
   {!loading && (viewMode === 'grid' ? renderGrid() : viewMode === 'mosaic' ? renderMosaic() : renderList())}
-
       {editing && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-end z-50">
           <div className="w-full max-w-md h-full bg-white shadow-xl flex flex-col">
@@ -720,7 +690,6 @@ export default function EpisodeHistory({ token, onBack }) {
           </div>
         </div>
       )}
-
       {unpublishEp && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white w-full max-w-sm rounded shadow-lg p-5 space-y-4">
@@ -737,19 +706,18 @@ export default function EpisodeHistory({ token, onBack }) {
               <Button variant="outline" size="sm" disabled={unpublishDoing} onClick={()=>setUnpublishEp(null)}>Cancel</Button>
               {unpublishCanForce && (
                 <Button variant="destructive" size="sm" disabled={unpublishDoing} onClick={()=>doUnpublish(true)}>
-                  {unpublishDoing ? <><Loader2 className="w-4 h-4 mr-1 animate-spin"/>Forcing…</> : 'Force Unpublish'}
+                  {unpublishDoing ? <><Loader2 className="w-4 h-4 mr-1 animate-spin"/>Forcing...</> : 'Force Unpublish'}
                 </Button>
               )}
               {!unpublishCanForce && (
                 <Button size="sm" disabled={unpublishDoing} onClick={()=>doUnpublish(false)}>
-                  {unpublishDoing ? <><Loader2 className="w-4 h-4 mr-1 animate-spin"/>Unpublishing…</> : 'Unpublish'}
+                  {unpublishDoing ? <><Loader2 className="w-4 h-4 mr-1 animate-spin"/>Unpublishing...</> : 'Unpublish'}
                 </Button>
               )}
             </div>
           </div>
         </div>
       )}
-
       {scheduleEp && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white w-full max-w-sm rounded shadow-lg p-5 space-y-4">
@@ -768,16 +736,18 @@ export default function EpisodeHistory({ token, onBack }) {
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" size="sm" disabled={scheduleSubmitting} onClick={closeSchedule}>Cancel</Button>
               <Button size="sm" disabled={scheduleSubmitting || !scheduleDate || !scheduleTime} onClick={submitSchedule}>
-                {scheduleSubmitting ? <><Loader2 className="w-4 h-4 mr-1 animate-spin"/>Scheduling…</> : 'Schedule'}
+                {scheduleSubmitting ? <><Loader2 className="w-4 h-4 mr-1 animate-spin"/>Scheduling...</> : 'Schedule'}
               </Button>
             </div>
           </div>
         </div>
       )}
-
       {(!loading && episodes.length === 0) && (
         <div className="text-gray-500">No episodes yet.</div>
       )}
     </div>
   );
 }
+
+
+

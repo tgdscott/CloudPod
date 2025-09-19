@@ -9,8 +9,11 @@ import ErrorPage from '@/pages/Error.jsx';
 import ABPreview from '@/pages/ABPreview.jsx';
 import OnboardingDemo from '@/pages/OnboardingDemo.jsx';
 import Onboarding from '@/pages/Onboarding.jsx';
+import PrivacyPolicy from '@/pages/PrivacyPolicy.jsx';
+import TermsOfUse from '@/pages/TermsOfUse.jsx';
 import { AuthProvider } from './AuthContext.jsx';
 import { BrandProvider } from './brand/BrandContext.jsx';
+import { ComfortProvider } from './ComfortContext.jsx';
 import './index.css' // <-- This line imports all the styles
 import { assetUrl } from './lib/apiClient';
 
@@ -78,6 +81,8 @@ const router = createBrowserRouter([
   { path: '/onboarding-demo', element: <OnboardingDemo /> },
   { path: '/onboarding', element: <Onboarding /> },
   { path: '/error', element: <ErrorPage /> },
+  { path: '/privacy', element: <PrivacyPolicy /> },
+  { path: '/terms', element: <TermsOfUse /> },
   // Fallback 404 for any unknown route
   { path: '*', element: <NotFound /> },
 ]);
@@ -86,8 +91,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <AuthProvider>
       <BrandProvider>
-        <RouterProvider router={router} />
+        <ComfortProvider>
+          <RouterProvider router={router} />
+        </ComfortProvider>
       </BrandProvider>
     </AuthProvider>
   </React.StrictMode>,
 )
+

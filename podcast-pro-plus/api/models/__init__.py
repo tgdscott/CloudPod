@@ -4,7 +4,7 @@ Prefer importing specific models from their modules, but keep these for backward
 """
 
 from .podcast import Episode, Podcast, PodcastTemplate, PodcastTemplateCreate, EpisodeStatus  # noqa: F401
-from .user import User, UserCreate, UserPublic  # noqa: F401
+from .user import User, UserCreate, UserPublic, UserTermsAcceptance  # noqa: F401
 from .subscription import Subscription  # noqa: F401
 from .settings import AppSetting  # noqa: F401
 from .usage import ProcessingMinutesLedger, LedgerDirection, LedgerReason  # noqa: F401

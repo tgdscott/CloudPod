@@ -60,7 +60,7 @@ export default function EpisodeHistoryPreview({ episodes, onEdit, onDelete, form
                   <div className="text-xs font-semibold leading-snug line-clamp-2" title={ep.title}>{ep.title || 'Untitled Episode'}</div>
                   <div className="text-[10px] text-gray-500 flex items-center gap-1" title={ep.publish_at || ''}>
                     {ep.publish_at && <CalendarClock className="w-3 h-3"/>}
-                    {ep.publish_at ? formatPublishAt(ep.publish_at) : '—'}
+                    {ep.publish_at ? formatPublishAt(ep.publish_at) : '-'}
                   </div>
                   <div className="flex items-center gap-2">
                     <button

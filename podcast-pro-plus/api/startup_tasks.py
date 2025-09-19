@@ -344,6 +344,38 @@ def _backfill_mediaitem_expires_at() -> None:
     finally:
         session.close()
 
+def _ensure_user_terms_columns() -> None:
+    """Ensure columns for tracking terms acceptance exist across engines."""
+    backend = engine.url.get_backend_name()
+    if backend == "sqlite":
+        try:
+            with engine.connect() as conn:
+                res = conn.exec_driver_sql("PRAGMA table_info(user)")
+                cols = {row[1] for row in res}
+                if "terms_version_accepted" not in cols:
+                    conn.exec_driver_sql("ALTER TABLE user ADD COLUMN terms_version_accepted TEXT NULL")
+                    log.info("[migrate] Added user.terms_version_accepted")
+                if "terms_accepted_at" not in cols:
+                    conn.exec_driver_sql("ALTER TABLE user ADD COLUMN terms_accepted_at TIMESTAMP NULL")
+                    log.info("[migrate] Added user.terms_accepted_at")
+                if "terms_accepted_ip" not in cols:
+                    conn.exec_driver_sql("ALTER TABLE user ADD COLUMN terms_accepted_ip VARCHAR(64) NULL")
+                    log.info("[migrate] Added user.terms_accepted_ip")
+        except Exception as exc:  # pragma: no cover
+            log.warning("[migrate] Unable to ensure user terms columns (sqlite): %s", exc)
+    else:
+        statements = [
+            'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS terms_version_accepted VARCHAR(64)',
+            'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMP NULL',
+            'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS terms_accepted_ip VARCHAR(64) NULL',
+        ]
+        try:
+            with engine.connect() as conn:
+                for stmt in statements:
+                    conn.exec_driver_sql(stmt)
+        except Exception as exc:  # pragma: no cover
+            log.warning("[migrate] Unable to ensure user terms columns (%s): %s", backend, exc)
+
 
 def run_startup_tasks() -> None:
     """Create tables and run all additive/idempotent startup tasks."""
@@ -356,6 +388,7 @@ def run_startup_tasks() -> None:
     _normalize_podcast_covers()
     _ensure_user_admin_column()
     _ensure_primary_admin()
+    _ensure_user_terms_columns()
     _ensure_user_subscription_column()
     _backfill_mediaitem_expires_at()
 
@@ -366,5 +399,8 @@ __all__ = [
     "_normalize_episode_paths",
     "_normalize_podcast_covers",
     "_ensure_user_subscription_column",
+    "_ensure_user_terms_columns",
     "_backfill_mediaitem_expires_at",
 ]
+
+

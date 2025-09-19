@@ -13,6 +13,7 @@ import Settings from '@/components/dashboard/Settings.jsx'; // Import the Settin
 import ClosedAlphaGate from '@/components/ClosedAlphaGate.jsx';
 import { Toaster } from '@/components/ui/toaster.jsx';
 import MetaHead from '@/components/MetaHead.jsx';
+import ComfortMenu from '@/components/common/ComfortMenu.jsx';
 
 // --- IMPORTANT ---
 // Admin is determined by backend role; no hard-coded emails.
@@ -170,7 +171,9 @@ export default function App() {
 export function AppWithToasterWrapper() {
     return <>
     <MetaHead />
+    <ComfortMenu />
         <App />
         <Toaster />
     </>;
 }
+

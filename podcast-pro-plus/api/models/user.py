@@ -34,10 +34,14 @@ class User(UserBase, table=True):
     subscription_expires_at: Optional[datetime] = Field(default=None, description="When the paid subscription ends")
     # Nullable last_login; populated on successful auth events
     last_login: Optional[datetime] = Field(default=None, description="Timestamp of last successful login")
+    terms_version_accepted: Optional[str] = Field(default=None, max_length=64, description="App terms version the user last accepted")
+    terms_accepted_at: Optional[datetime] = Field(default=None, description="When the user accepted the current terms")
+    terms_accepted_ip: Optional[str] = Field(default=None, max_length=64, description="IP address at latest acceptance")
     is_admin: bool = Field(default=False, description="Whether this user has admin privileges")
 
     # This creates the link back to the templates that belong to this user
     templates: List["PodcastTemplate"] = Relationship(back_populates="user")
+    terms_acceptances: List["UserTermsAcceptance"] = Relationship(back_populates="user")
 
 class UserCreate(UserBase):
     """Schema for creating a new user (registration)."""
@@ -48,6 +52,20 @@ class UserPublic(UserBase):
     id: UUID
     created_at: datetime
     last_login: Optional[datetime] = None
+    terms_version_accepted: Optional[str] = None
+    terms_accepted_at: Optional[datetime] = None
+    terms_version_required: Optional[str] = None
     # Admin flags exposed for frontend gating
     is_admin: bool = Field(default=False, description="Whether this user has admin privileges")
     role: Optional[str] = Field(default=None, description="Normalized role label, e.g., 'admin'")
+
+class UserTermsAcceptance(SQLModel, table=True):
+    """Audit log of terms of use acceptance events."""
+    id: UUID = Field(default_factory=uuid4, primary_key=True, index=True)
+    user_id: UUID = Field(foreign_key="user.id", index=True)
+    version: str = Field(max_length=64, index=True)
+    accepted_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    ip_address: Optional[str] = Field(default=None, max_length=64)
+    user_agent: Optional[str] = Field(default=None, max_length=512)
+
+    user: Optional["User"] = Relationship(back_populates="terms_acceptances")

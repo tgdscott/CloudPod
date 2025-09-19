@@ -230,7 +230,7 @@ export default function OnboardingWrapper({ steps, index, setIndex, onComplete, 
               aria-live="polite"
               aria-atomic="true"
             >
-              {`Step ${index + 1}: ${step?.title || ''}${liveMsg ? ` — ${liveMsg}` : ''}`}
+              {`Step ${index + 1}: ${step?.title || ''}${liveMsg ? ` - ${liveMsg}` : ''}`}
             </div>
             {/* Screen-reader progress list with aria-current */}
             <nav className="sr-only" aria-label="Step Progress">
@@ -284,7 +284,7 @@ export default function OnboardingWrapper({ steps, index, setIndex, onComplete, 
             <div className="flex items-center gap-2">
               {isLast && (
                 <span className="text-xs text-muted-foreground hidden md:inline-flex items-center gap-1">
-                  <CheckCircle2 className="h-4 w-4" /> You’re all set after this
+                  <CheckCircle2 className="h-4 w-4" /> You're all set after this
                 </span>
               )}
               <Button
@@ -326,7 +326,7 @@ export default function OnboardingWrapper({ steps, index, setIndex, onComplete, 
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground mb-3">
-                We’re here to help. Browse quick guides or reach out.
+                We're here to help. Browse quick guides or reach out.
               </p>
               <div className="flex gap-2">
                 <Button variant="outline" className="rounded-[var(--radius)] h-11 min-h-[44px] px-5" asChild>

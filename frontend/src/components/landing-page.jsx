@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Mic,
   Settings,
@@ -17,8 +18,8 @@ import {
   ArrowRight,
   X,
 } from "lucide-react"
-import { useState, useEffect } from "react"
-import { useAuth } from "@/AuthContext"
+import { useState, useEffect, useRef } from "react"
+import { useAuth } from "@/AuthContext.jsx"
 import { makeApi } from '@/lib/apiClient';
 import { useBrand } from "@/brand/BrandContext.jsx";
 import Logo from "@/components/Logo.jsx";
@@ -50,9 +51,54 @@ const LoginModal = ({ onClose }) => {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [mode, setMode] = useState('login'); // 'login' | 'register'
+    const [showPassword, setShowPassword] = useState(false);
+    const emailRef = useRef(null);
+    const passwordRef = useRef(null);
+    const fallbackTermsVersion = import.meta?.env?.VITE_TERMS_VERSION || '2025-09-19';
+    const [acceptTerms, setAcceptTerms] = useState(false);
+    const [termsInfo, setTermsInfo] = useState({ version: fallbackTermsVersion, url: '/terms' });
+    const [termsLoading, setTermsLoading] = useState(false);
+    const [registerSubmitting, setRegisterSubmitting] = useState(false);
 
-    const attemptEmailLogin = async () => {
-        const params = new URLSearchParams({ username: email, password });
+
+    useEffect(() => {
+        let cancelled = false;
+        const loadTerms = async () => {
+            setTermsLoading(true);
+            try {
+                const res = await fetch(apiUrl('/api/auth/terms/info'));
+                if (!res.ok) {
+                    throw new Error('terms_fetch_failed');
+                }
+                const data = await res.json().catch(() => ({}));
+                if (!cancelled) {
+                    setTermsInfo({
+                        version: (data && data.version) || fallbackTermsVersion,
+                        url: (data && data.url) || '/terms',
+                    });
+                }
+            } catch (_err) {
+                if (!cancelled) {
+                    setTermsInfo(prev => ({
+                        version: (prev && prev.version) || fallbackTermsVersion,
+                        url: (prev && prev.url) || '/terms',
+                    }));
+                }
+            } finally {
+                if (!cancelled) {
+                    setTermsLoading(false);
+                }
+            }
+        };
+        loadTerms();
+        return () => {
+            cancelled = true;
+        };
+    }, [fallbackTermsVersion]);
+
+
+    const attemptEmailLogin = async (nextEmail, nextPassword) => {
+        const params = new URLSearchParams({ username: (nextEmail ?? email).trim(), password: nextPassword ?? password });
         try {
             const res = await fetch(apiUrl('/api/auth/token'), {
                 method: 'POST',
@@ -80,11 +126,29 @@ const LoginModal = ({ onClose }) => {
         }
     };
 
+    const ensureFields = () => {
+        const trimmedEmail = email.trim();
+        if (!trimmedEmail) {
+            setError('Email is required.');
+            emailRef.current?.focus();
+            return null;
+        }
+        if (!password) {
+            setError('Password is required.');
+            passwordRef.current?.focus();
+            return null;
+        }
+        return trimmedEmail;
+    };
+
     const handleEmailLogin = async (e) => {
         e.preventDefault();
         setError('');
+        const trimmedEmail = ensureFields();
+        if (!trimmedEmail) return;
+        setEmail(trimmedEmail);
         try {
-            await attemptEmailLogin();
+            await attemptEmailLogin(trimmedEmail, password);
         } catch (_) {
             // error already surfaced via setError
         }
@@ -93,11 +157,25 @@ const LoginModal = ({ onClose }) => {
     const handleRegister = async (e) => {
         e.preventDefault();
         setError('');
+        if (!acceptTerms) {
+            setError('Please confirm you agree to the Terms of Use to continue.');
+            return;
+        }
+        const trimmedEmail = ensureFields();
+        if (!trimmedEmail) return;
+        setEmail(trimmedEmail);
+        const versionToSend = termsInfo?.version || fallbackTermsVersion;
+        setRegisterSubmitting(true);
         try {
             const res = await fetch(apiUrl('/api/auth/register'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password }),
+                body: JSON.stringify({
+                    email: trimmedEmail,
+                    password,
+                    accept_terms: true,
+                    terms_version: versionToSend,
+                }),
                 credentials: 'include',
             });
             if (!res.ok) {
@@ -111,11 +189,15 @@ const LoginModal = ({ onClose }) => {
                 }
                 return;
             }
-            await attemptEmailLogin();
+            await attemptEmailLogin(trimmedEmail, password);
+            setAcceptTerms(false);
         } catch (err) {
-            setError(prev => prev || 'Registration error. Please try again.');
+            setError((prev) => prev || 'Registration error. Please try again.');
+        } finally {
+            setRegisterSubmitting(false);
         }
     };
+
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -126,17 +208,86 @@ const LoginModal = ({ onClose }) => {
                 </CardHeader>
                 <CardContent>
                     <form onSubmit={mode === 'login' ? handleEmailLogin : handleRegister} className="space-y-4">
+                        {error && (
+                            <div
+                                className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+                                role="alert"
+                                aria-live="assertive"
+                            >
+                                {error}
+                            </div>
+                        )}
                         <div className="space-y-2">
                             <Label htmlFor="email">Email</Label>
-                            <Input id="email" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                            <Input
+                                ref={emailRef}
+                                id="email"
+                                type="email"
+                                autoComplete="email"
+                                placeholder="you@example.com"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                inputMode="email"
+                            />
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="password">Password</Label>
-                            <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                            <div className="relative">
+                                <Input
+                                    ref={passwordRef}
+                                    id="password"
+                                    type={showPassword ? 'text' : 'password'}
+                                    autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    className="pr-20"
+                                />
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="absolute inset-y-1 right-1 h-7 px-2 text-xs"
+                                    onClick={() => setShowPassword((prev) => !prev)}
+                                    aria-pressed={showPassword}
+                                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                                >
+                                    {showPassword ? 'Hide' : 'Show'}
+                                </Button>
+                            </div>
                         </div>
-                        {error && <p className="text-sm text-red-500">{error}</p>}
-                        <Button type="submit" className="w-full">{mode === 'login' ? 'Sign In with Email' : 'Create Account'}</Button>
-                        <button type="button" onClick={() => { setMode(m => m === 'login' ? 'register' : 'login'); setError(''); }} className="w-full text-xs text-blue-600 hover:underline">
+                        {mode === 'register' && (
+                            <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm">
+                                <div className="flex items-start gap-2">
+                                    <Checkbox
+                                        id="accept-terms"
+                                        checked={acceptTerms}
+                                        disabled={termsLoading || registerSubmitting}
+                                        onCheckedChange={(checked) => setAcceptTerms(Boolean(checked))}
+                                    />
+                                    <label htmlFor="accept-terms" className="text-sm leading-5 text-slate-700">
+                                        I agree to the <a href={(termsInfo?.url) || '/terms'} target="_blank" rel="noreferrer" className="font-medium text-blue-600 hover:text-blue-700">Terms of Use</a> and acknowledge the
+                                        <span className="whitespace-nowrap">&nbsp;</span>
+                                        <a href="/privacy" target="_blank" rel="noreferrer" className="font-medium text-blue-600 hover:text-blue-700">Privacy Policy</a>.
+                                        {termsInfo?.version && (
+                                            <span className="mt-1 block text-xs text-muted-foreground">Current version: {termsInfo.version}</span>
+                                        )}
+                                    </label>
+                                </div>
+                            </div>
+                        )}
+                        <Button type="submit" className="w-full" disabled={submitDisabled}>
+                            {submitText}
+                        </Button>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setMode(m => m === 'login' ? 'register' : 'login');
+                                setError('');
+                                setRegisterSubmitting(false);
+                                setAcceptTerms(false);
+                            }}
+                            className="w-full text-xs text-blue-600 hover:underline"
+                        >
                             {mode === 'login' ? "Need an account? Sign up" : "Have an account? Sign in"}
                         </button>
                     </form>
@@ -793,11 +944,11 @@ export default function PodcastPlusLanding() {
             className="border-t border-gray-200 pt-8 flex flex-col md:flex-row justify-between items-center">
             <p className="text-gray-600 mb-4 md:mb-0">Podcast Plus © 2025. All rights reserved.</p>
             <div className="flex space-x-6">
-              <a href="#" className="text-gray-600 hover:text-gray-800 transition-colors">
+              <a href="/privacy" className="text-gray-600 hover:text-gray-800 transition-colors">
                 Privacy Policy
               </a>
-              <a href="#" className="hover:text-gray-800 transition-colors">
-                Terms of Service
+              <a href="/terms" className="hover:text-gray-800 transition-colors">
+                Terms of Use
               </a>
               <a href="#" className="hover:text-gray-800 transition-colors">
                 Cookie Policy
@@ -809,3 +960,23 @@ export default function PodcastPlusLanding() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

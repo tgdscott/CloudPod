@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     OAUTH_BACKEND_BASE: Optional[str] = None
     CORS_ALLOWED_ORIGINS: str
 
+    # --- Legal ---
+    TERMS_VERSION: str = "2025-09-19"
+    TERMS_URL: str = "https://app.getpodcastplus.com/terms"
+
     # --- JWT Settings ---
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
